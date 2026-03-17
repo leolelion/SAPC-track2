@@ -1,0 +1,38 @@
+# =====================================================================
+#  GigaAM Streaming — Configuration
+#
+#  All tunable settings live here. Edit values below to experiment,
+#  then re-run. No need to modify model.py.
+#
+#  ⚠️  IMPORTANT: GigaAM was trained on Russian speech.
+#  English recognition quality is UNKNOWN. Run the smoke test in
+#  test_streaming.py with real English audio before benchmarking.
+#
+#  Model variants:
+#    v2_rnnt  — RNNT decoder, streaming-capable (~100M params)
+#    v2_ctc   — CTC decoder, streaming-capable (~100M params)
+#
+#  v2_rnnt is preferred for streaming (transducer = natural partial outputs)
+#
+#  Partial inference note:
+#    GigaAM does not expose per-frame streaming via its Python API.
+#    Partial results run full inference on the buffered audio so far.
+#    At ~100M params, inference on 2–5 s of audio may take 0.5–2 s on
+#    CPU — benchmark partial_interval_chunks carefully.
+# =====================================================================
+
+# --- Model ---
+model:
+  name: "v2_rnnt"                 # "v2_rnnt" (RNNT) or "v2_ctc" (CTC)
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000              # Hz — must match the competition's 16 kHz stream
+
+# --- Streaming Behaviour ---
+streaming:
+  partial_interval_chunks: 30     # Run partial inference every N chunks (N×100 ms).
+                                  # 30 = every 3 s. 0 = disabled (saves CPU).
+                                  # GigaAM is heavier than Moonshine; set conservatively.
+  min_chunks_for_partial: 15      # Require at least this many chunks before the
+                                  # first partial inference (~1.5 s of audio minimum).

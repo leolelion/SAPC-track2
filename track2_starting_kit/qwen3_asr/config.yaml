@@ -1,0 +1,35 @@
+# =====================================================================
+#  Qwen3-ASR Streaming — Configuration
+#
+#  All tunable settings live here. Edit values below to experiment,
+#  then re-run. No need to modify model.py.
+#
+#  CPU latency note:
+#    Inference on a 1.7B model takes ~5–15 s per utterance on CPU.
+#    Set partial_interval_chunks: 0 to run inference only once (in
+#    input_finished), avoiding redundant calls. Accuracy is unaffected;
+#    only TTFT/TTLT latency metrics suffer.
+# =====================================================================
+
+# --- Model ---
+model:
+  name: "Qwen/Qwen3-ASR-1.7B"    # HuggingFace model ID or local path
+  torch_dtype: "float32"           # float32 for CPU; bfloat16 if GPU available
+  language: null                   # null = auto-detect; or e.g. "English", "Chinese"
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000               # Hz — must match the competition's 16 kHz stream
+
+# --- Streaming Behaviour ---
+streaming:
+  partial_interval_chunks: 0       # Run partial inference every N chunks (N×100 ms).
+                                   # 0 = disabled (recommended on CPU).
+                                   # 20 = every 2 s, 30 = every 3 s, etc.
+  min_chunks_for_partial: 10       # Require at least this many chunks (1 s) before
+                                   # firing the first partial inference.
+
+# --- Decoding ---
+decoding:
+  max_new_tokens: 512              # Max tokens to generate per utterance.
+                                   # Raise if long audio is getting cut off.

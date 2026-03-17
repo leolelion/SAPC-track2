@@ -1,0 +1,58 @@
+# =====================================================================
+#  Sherpa-ONNX Zipformer Streaming — Configuration
+#
+#  All tunable settings live here. Edit values below to experiment,
+#  then re-run. No need to modify model.py.
+#
+#  Variant guide (model.variant):
+#    standard  ~70M params  LibriSpeech-trained, official baseline
+#              Expected: CER ~34% zero-shot, RTF < 0.3× on CPU
+#    kroko     Zipformer2 architecture, edge-optimised variant
+#              Expected: similar or better accuracy vs. standard at
+#              similar or lower latency
+#    small     ~20M params  Pareto latency anchor (embedded/Cortex-A7)
+#              Expected: worse zero-shot accuracy, much lower RTF
+#
+#  After running setup.sh for a variant, weights land in:
+#    sherpa_zipformer/weights/<variant>/
+#
+#  To switch variants:
+#    1. Change model.variant below
+#    2. Re-run setup.sh (it reads this file to pick the download target)
+# =====================================================================
+
+# --- Model ---
+model:
+  variant: "standard"             # "standard" | "kroko" | "small"
+
+  # ONNX file names within weights/<variant>/ (usually unchanged)
+  encoder_file: "encoder.onnx"
+  decoder_file: "decoder.onnx"
+  joiner_file:  "joiner.onnx"
+  tokens_file:  "tokens.txt"
+
+  # Number of CPU threads for ONNX Runtime inference.
+  # On the evaluation server, 4 is a safe default.
+  num_threads: 4
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000              # Hz — must match the competition's 16 kHz stream
+  feature_dim: 80                 # Mel filterbank bins (standard for Zipformer)
+
+# --- Decoding Strategy ---
+decoding:
+  method: "greedy_search"         # "greedy_search" | "modified_beam_search"
+                                  # greedy_search: fastest, ~1% worse WER
+                                  # modified_beam_search: max_active_paths beams
+  max_active_paths: 4             # Beam width (only for modified_beam_search)
+
+# --- Endpoint Detection ---
+# When enabled, the recognizer fires an endpoint after a configurable
+# silence duration. Disabled by default — the competition ingestion
+# program controls utterance boundaries via input_finished().
+endpoint:
+  enable: false
+  rule1_min_trailing_silence: 2.4 # s — silence after voice (safe default)
+  rule2_min_trailing_silence: 1.2 # s — silence after non-blank tokens
+  rule3_min_utterance_length: 20  # s — force endpoint for long utterances

@@ -1,0 +1,51 @@
+# =====================================================================
+#  Faster-Whisper Streaming — Configuration
+#
+#  All tunable settings live here. Edit values below to experiment,
+#  then re-run. No need to modify model.py.
+#
+#  Model size guide (CPU, INT8):
+#    tiny    (39M)  — fastest, lowest accuracy
+#    base    (74M)  — fast, slightly better
+#    small   (244M) — good balance, recommended starting point
+#    medium  (769M) — slower, higher accuracy
+#    distil-small.en  — distilled small, English-only, ~2× faster than small
+#    distil-medium.en — distilled medium, English-only, faster than medium
+#
+#  compute_type guide:
+#    int8       — fastest on CPU, minor accuracy drop
+#    float32    — slower, full precision (use if int8 is inaccurate)
+#
+#  Partial inference note:
+#    Whisper is not frame-by-frame streaming. Partial results require
+#    running full inference on the buffered audio so far.
+#    With small+int8, each inference call takes ~0.5–3 s on CPU,
+#    so partial_interval_chunks: 20 (every 2 s) is practical.
+# =====================================================================
+
+# --- Model ---
+model:
+  name: "small"                     # HuggingFace model ID or size string
+                                    # e.g. "small", "base", "distil-small.en"
+  compute_type: "int8"              # "int8" (fastest CPU) or "float32"
+  language: "en"                    # Force English — skips language detection,
+                                    # saves ~0.1 s per utterance. Set null to auto-detect.
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000                # Hz — must match the competition's 16 kHz stream
+
+# --- Streaming Behaviour ---
+streaming:
+  partial_interval_chunks: 20       # Run partial inference every N chunks (N×100 ms).
+                                    # 20 = every 2 s. 0 = disabled.
+  min_chunks_for_partial: 10        # Require at least this many chunks (1 s) before
+                                    # the first partial inference.
+
+# --- Decoding ---
+decoding:
+  beam_size: 5                      # Beam search width. 1 = greedy (fastest).
+  condition_on_previous_text: false # Conditioning on previous text can hurt dysarthric
+                                    # speech by propagating hallucinations. Disabled.
+  no_speech_threshold: 0.6          # Probability threshold to consider a segment silent.
+  compression_ratio_threshold: 2.4  # Discard segments with high repetition (hallucinations).

@@ -1,0 +1,31 @@
+# =====================================================================
+#  Moonshine Streaming — Configuration
+#
+#  All tunable settings live here. Edit values below to experiment,
+#  then re-run. No need to modify model.py.
+#
+#  Model size vs. speed:
+#    moonshine/tiny  (~30M params)  — fastest, lowest accuracy
+#    moonshine/base  (~100M params) — slower, better accuracy
+#
+#  Partial inference note:
+#    Moonshine is not a frame-by-frame streaming model. Partial results
+#    require running full inference on the buffered audio so far.
+#    On CPU, tiny takes ~50–200 ms per utterance, so partial inference
+#    every 2 s is cheap enough to enable by default.
+# =====================================================================
+
+# --- Model ---
+model:
+  name: "moonshine/tiny"            # "moonshine/tiny" or "moonshine/base"
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000                # Hz — must match the competition's 16 kHz stream
+
+# --- Streaming Behaviour ---
+streaming:
+  partial_interval_chunks: 20       # Run partial inference every N chunks (N×100 ms).
+                                    # 20 = every 2 s. 0 = disabled.
+  min_chunks_for_partial: 10        # Require at least this many chunks before the
+                                    # first partial inference (avoids very short bursts).
