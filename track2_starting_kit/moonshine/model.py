@@ -46,9 +46,12 @@ Directory layout after running setup.sh:
 import os
 import sys
 
-_VENV_SITE = "/opt/moonshine_venv/lib/python3.11/site-packages"
-if os.path.isdir(_VENV_SITE):
-    sys.path.insert(0, _VENV_SITE)
+import glob as _glob
+_venv_candidates = _glob.glob(
+    os.path.join(os.path.dirname(__file__), "venv", "lib", "python3.*", "site-packages")
+)
+if _venv_candidates:
+    sys.path.insert(0, _venv_candidates[0])
 
 # =====================================================================
 # Section 2: Imports
@@ -59,6 +62,7 @@ from typing import Callable, List, Optional
 import numpy as np
 from omegaconf import OmegaConf
 from moonshine_onnx import MoonshineOnnxModel
+from moonshine_onnx.transcribe import load_tokenizer
 
 # =====================================================================
 # Section 3: Config
@@ -90,6 +94,7 @@ class Model:
         # first use and caches them. setup.sh pre-downloads them so that
         # inference time at evaluation is not spent on downloads.
         self._model = MoonshineOnnxModel(model_name=model_name)
+        self._tokenizer = load_tokenizer()
 
         # Per-file state — reset in reset()
         self._audio_chunks: List[np.ndarray] = []
@@ -156,7 +161,7 @@ class Model:
         and passes it to MoonshineOnnxModel.generate(). The returned
         token sequences are decoded to text via decode_tokens().
         """
-        audio = np.concatenate(self._audio_chunks)  # (N,) float32, 16 kHz
+        audio = np.concatenate(self._audio_chunks)[np.newaxis, :]  # (1, N) float32, 16 kHz
         tokens = self._model.generate(audio)
-        transcription = self._model.decode_tokens(tokens)
-        return transcription.strip()
+        transcription = self._tokenizer.decode_batch(tokens)
+        return transcription[0].strip()
