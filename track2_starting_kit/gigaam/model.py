@@ -50,9 +50,8 @@ Directory layout after running setup.sh:
 import os
 import sys
 
-_VENV_SITE = "/opt/gigaam_venv/lib/python3.11/site-packages"
-if os.path.isdir(_VENV_SITE):
-    sys.path.insert(0, _VENV_SITE)
+# gigaam is installed in the base env (setup.sh uses --no-deps to bypass
+# the torch<=2.5.1 constraint, relying on the base env's torch).
 
 # =====================================================================
 # Section 2: Imports
@@ -64,6 +63,10 @@ import numpy as np
 from omegaconf import OmegaConf
 
 try:
+    import torch
+    # torch 2.6+ changed torch.load default to weights_only=True, breaking gigaam.
+    _orig_load = torch.load
+    torch.load = lambda *a, **kw: _orig_load(*a, **{**kw, 'weights_only': False})
     import gigaam
 except ImportError as exc:
     raise ImportError(
@@ -191,17 +194,23 @@ class Model:
         """
         audio = np.concatenate(self._audio_chunks)  # (N,) float32, 16 kHz
 
+        # gigaam.transcribe() expects a wav file path, not a numpy array.
+        import tempfile, wave, os
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            tmp_path = f.name
         try:
-            # Primary API (gigaam v0.1+)
-            result = self._model.transcribe(audio, sr=self.SAMPLE_RATE)
-        except TypeError:
-            # Fallback: some versions accept just the waveform
-            result = self._model.transcribe(audio)
+            pcm = np.round(audio * 32767).astype(np.int16)
+            with wave.open(tmp_path, "w") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(self.SAMPLE_RATE)
+                wf.writeframes(pcm.tobytes())
+            result = self._model.transcribe(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
-        # gigaam.transcribe() returns a string directly
         if isinstance(result, str):
             return result.strip()
-        # Some versions return a list or dict — handle gracefully
         if isinstance(result, list):
             return " ".join(str(r) for r in result).strip()
         return str(result).strip()
