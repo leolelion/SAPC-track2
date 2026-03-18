@@ -76,14 +76,13 @@ case "${VARIANT}" in
     ;;
 
   kroko)
-    # Zipformer2 architecture — edge-optimised, newer than standard
-    # Zipformer2 improves accuracy at similar or lower compute cost
-    # ⚠️  Filenames not verified — check actual repo contents before running
-    HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer2-en-2024-09-18"
+    # Zipformer2 architecture — edge-optimised, named "kroko" in HF repo
+    # Files are already canonically named (encoder.onnx etc.), no renaming needed
+    HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06"
     FILES=(
-      "encoder-epoch-99-avg-1.onnx"
-      "decoder-epoch-99-avg-1.onnx"
-      "joiner-epoch-99-avg-1.onnx"
+      "encoder.onnx"
+      "decoder.onnx"
+      "joiner.onnx"
       "tokens.txt"
     )
     ;;
