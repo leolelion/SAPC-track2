@@ -1,1 +1,45 @@
-Mar_3.md
+# Model weights
+**/weights/
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.bin
+*.safetensors
+*.gguf
+*.onnx
+*.tflite
+*.pb
+
+# Python environments
+**/venv/
+**/.venv/
+**/env/
+**/.env/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Data files
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.opus
+data/
+
+# Secrets / credentials
+.env
+*.key
+*.pem
+secrets.*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
