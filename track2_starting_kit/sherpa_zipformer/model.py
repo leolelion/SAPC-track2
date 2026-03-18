@@ -123,7 +123,7 @@ class Model:
             waveform=audio_chunk,
         )
         self._drain()
-        text = self._recognizer.get_result(self._stream).text.strip()
+        text = self._recognizer.get_result(self._stream).strip()
         if text and self._partial_callback is not None:
             self._partial_callback(text)
         return text
@@ -140,7 +140,7 @@ class Model:
         )
         self._stream.input_finished()
         self._drain()
-        final_text = self._recognizer.get_result(self._stream).text.strip()
+        final_text = self._recognizer.get_result(self._stream).strip()
         if self._partial_callback is not None:
             self._partial_callback(final_text)
         return final_text
@@ -152,32 +152,22 @@ class Model:
     def _drain(self) -> None:
         """Decode all frames that the recognizer has ready."""
         while self._recognizer.is_ready(self._stream):
-            self._recognizer.decode(self._stream)
+            self._recognizer.decode_stream(self._stream)
 
     def _build_recognizer(self, weights_dir: Path) -> sherpa_onnx.OnlineRecognizer:
         """Construct and return an OnlineRecognizer from config + weights."""
         cfg = _config
         w = weights_dir
 
-        model_cfg = sherpa_onnx.OnlineModelConfig(
-            transducer=sherpa_onnx.OnlineTransducerModelConfig(
-                encoder=str(w / cfg.model.encoder_file),
-                decoder=str(w / cfg.model.decoder_file),
-                joiner=str(w / cfg.model.joiner_file),
-            ),
+        return sherpa_onnx.OnlineRecognizer.from_transducer(
+            encoder=str(w / cfg.model.encoder_file),
+            decoder=str(w / cfg.model.decoder_file),
+            joiner=str(w / cfg.model.joiner_file),
             tokens=str(w / cfg.model.tokens_file),
             num_threads=cfg.model.num_threads,
             provider="cpu",
-        )
-
-        feat_cfg = sherpa_onnx.FeatureExtractorConfig(
-            sampling_rate=cfg.audio.sample_rate,
+            sample_rate=cfg.audio.sample_rate,
             feature_dim=cfg.audio.feature_dim,
-        )
-
-        recognizer_cfg = sherpa_onnx.OnlineRecognizerConfig(
-            feat_config=feat_cfg,
-            model_config=model_cfg,
             decoding_method=cfg.decoding.method,
             max_active_paths=cfg.decoding.max_active_paths,
             enable_endpoint_detection=cfg.endpoint.enable,
@@ -185,5 +175,3 @@ class Model:
             rule2_min_trailing_silence=cfg.endpoint.rule2_min_trailing_silence,
             rule3_min_utterance_length=cfg.endpoint.rule3_min_utterance_length,
         )
-
-        return sherpa_onnx.OnlineRecognizer(recognizer_cfg)

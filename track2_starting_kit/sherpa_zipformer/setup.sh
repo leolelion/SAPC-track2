@@ -32,13 +32,12 @@ echo "=== Sherpa-ONNX Zipformer setup (variant: ${VARIANT}) ==="
 # Stage 1: Install sherpa-onnx and omegaconf
 # -----------------------------------------------------------------------
 echo "--- Stage 1: pip install sherpa-onnx omegaconf ---"
-pip install --no-cache-dir "sherpa-onnx>=1.10.0" "omegaconf>=2.3"
-
-echo "--- Verifying sherpa-onnx installation ---"
-python3 -c "
-import sherpa_onnx
-print('sherpa-onnx version:', sherpa_onnx.__version__)
-"
+if python3 -c "import sherpa_onnx, omegaconf" 2>/dev/null; then
+  python3 -c "import sherpa_onnx; print('  Already installed — sherpa-onnx version:', sherpa_onnx.__version__)"
+else
+  pip install --no-cache-dir "sherpa-onnx>=1.10.0" "omegaconf>=2.3"
+  python3 -c "import sherpa_onnx; print('sherpa-onnx version:', sherpa_onnx.__version__)"
+fi
 
 # -----------------------------------------------------------------------
 # Stage 2: Download ONNX model weights
@@ -55,6 +54,11 @@ echo "--- Stage 2: Downloading weights for variant '${VARIANT}' ---"
 WEIGHTS_DIR="${DIR}/weights/${VARIANT}"
 mkdir -p "${WEIGHTS_DIR}"
 
+if [ -f "${WEIGHTS_DIR}/encoder.onnx" ] && [ -f "${WEIGHTS_DIR}/decoder.onnx" ] && [ -f "${WEIGHTS_DIR}/joiner.onnx" ]; then
+  echo "  Weights already present — skipping download."
+  # skip to stage 3
+else
+
 # Map variant → HuggingFace repo and file list
 case "${VARIANT}" in
 
@@ -63,22 +67,18 @@ case "${VARIANT}" in
     # Corresponds to: icefall-asr-librispeech-streaming-zipformer-2023-05-17
     HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26"
     FILES=(
-      "encoder-epoch-99-avg-1.onnx"
-      "decoder-epoch-99-avg-1.onnx"
-      "joiner-epoch-99-avg-1.onnx"
+      "encoder-epoch-99-avg-1-chunk-16-left-128.onnx"
+      "decoder-epoch-99-avg-1-chunk-16-left-128.onnx"
+      "joiner-epoch-99-avg-1-chunk-16-left-128.onnx"
       "tokens.txt"
+      "bpe.model"
     )
-    # Rename to the canonical names expected by model.py config
-    RENAME_encoder="encoder.onnx"
-    RENAME_decoder="decoder.onnx"
-    RENAME_joiner="joiner.onnx"
-    RENAME_tokens="tokens.txt"
     ;;
 
   kroko)
     # Zipformer2 architecture — edge-optimised, newer than standard
     # Zipformer2 improves accuracy at similar or lower compute cost
-    # ⚠️  Verify exact repo name from sherpa-onnx model zoo
+    # ⚠️  Filenames not verified — check actual repo contents before running
     HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer2-en-2024-09-18"
     FILES=(
       "encoder-epoch-99-avg-1.onnx"
@@ -86,16 +86,12 @@ case "${VARIANT}" in
       "joiner-epoch-99-avg-1.onnx"
       "tokens.txt"
     )
-    RENAME_encoder="encoder.onnx"
-    RENAME_decoder="decoder.onnx"
-    RENAME_joiner="joiner.onnx"
-    RENAME_tokens="tokens.txt"
     ;;
 
   small)
     # ~20M params — smallest Zipformer, targeting embedded/Cortex-A7 devices
     # Much lower RTF than standard; accuracy recovers with fine-tuning on SAP data
-    # ⚠️  Verify exact repo name from sherpa-onnx model zoo
+    # ⚠️  Filenames not verified — check actual repo contents before running
     HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer-small-en-2023-06-26"
     FILES=(
       "encoder-epoch-99-avg-1.onnx"
@@ -103,10 +99,6 @@ case "${VARIANT}" in
       "joiner-epoch-99-avg-1.onnx"
       "tokens.txt"
     )
-    RENAME_encoder="encoder.onnx"
-    RENAME_decoder="decoder.onnx"
-    RENAME_joiner="joiner.onnx"
-    RENAME_tokens="tokens.txt"
     ;;
 
   *)
@@ -141,10 +133,21 @@ PYEOF
 # Rename files to canonical names expected by model.py config
 (
   cd "${WEIGHTS_DIR}"
-  for src in encoder-epoch-*.onnx; do [ -f "\$src" ] && mv "\$src" encoder.onnx && echo "  Renamed \$src → encoder.onnx"; done || true
-  for src in decoder-epoch-*.onnx; do [ -f "\$src" ] && mv "\$src" decoder.onnx && echo "  Renamed \$src → decoder.onnx"; done || true
-  for src in joiner-epoch-*.onnx;  do [ -f "\$src" ] && mv "\$src" joiner.onnx  && echo "  Renamed \$src → joiner.onnx";  done || true
+  case "${VARIANT}" in
+    standard)
+      mv "encoder-epoch-99-avg-1-chunk-16-left-128.onnx" encoder.onnx 2>/dev/null && echo "  Renamed encoder → encoder.onnx" || true
+      mv "decoder-epoch-99-avg-1-chunk-16-left-128.onnx" decoder.onnx 2>/dev/null && echo "  Renamed decoder → decoder.onnx" || true
+      mv "joiner-epoch-99-avg-1-chunk-16-left-128.onnx"  joiner.onnx  2>/dev/null && echo "  Renamed joiner  → joiner.onnx"  || true
+      ;;
+    *)
+      # kroko/small: filenames not verified, fall back to glob rename
+      for src in encoder-epoch-*.onnx; do [ -f "$src" ] && mv "$src" encoder.onnx && echo "  Renamed $src → encoder.onnx"; done || true
+      for src in decoder-epoch-*.onnx; do [ -f "$src" ] && mv "$src" decoder.onnx && echo "  Renamed $src → decoder.onnx"; done || true
+      for src in joiner-epoch-*.onnx;  do [ -f "$src" ] && mv "$src" joiner.onnx  && echo "  Renamed $src → joiner.onnx";  done || true
+      ;;
+  esac
 )
+fi  # end weights download block
 
 # -----------------------------------------------------------------------
 # Stage 3: Smoke test — build recognizer from the downloaded weights
@@ -160,38 +163,27 @@ from pathlib import Path
 cfg = OmegaConf.load("${DIR}/config.yaml")
 w = Path("${WEIGHTS_DIR}")
 
-model_cfg = sherpa_onnx.OnlineModelConfig(
-    transducer=sherpa_onnx.OnlineTransducerModelConfig(
-        encoder=str(w / cfg.model.encoder_file),
-        decoder=str(w / cfg.model.decoder_file),
-        joiner=str(w / cfg.model.joiner_file),
-    ),
+rec = sherpa_onnx.OnlineRecognizer.from_transducer(
+    encoder=str(w / cfg.model.encoder_file),
+    decoder=str(w / cfg.model.decoder_file),
+    joiner=str(w / cfg.model.joiner_file),
     tokens=str(w / cfg.model.tokens_file),
     num_threads=1,
     provider="cpu",
-)
-feat_cfg = sherpa_onnx.FeatureExtractorConfig(
-    sampling_rate=cfg.audio.sample_rate,
+    sample_rate=cfg.audio.sample_rate,
     feature_dim=cfg.audio.feature_dim,
-)
-recognizer_cfg = sherpa_onnx.OnlineRecognizerConfig(
-    feat_config=feat_cfg,
-    model_config=model_cfg,
     decoding_method="greedy_search",
 )
-rec = sherpa_onnx.OnlineRecognizer(recognizer_cfg)
 stream = rec.create_stream()
 
 import numpy as np
 # 0.5 s of silence — just testing the pipeline, not accuracy
 chunk = np.zeros(8000, dtype=np.float32)
 stream.accept_waveform(sample_rate=16000, waveform=chunk)
-while rec.is_ready(stream):
-    rec.decode(stream)
 stream.input_finished()
 while rec.is_ready(stream):
-    rec.decode(stream)
-result = rec.get_result(stream).text
+    rec.decode_stream(stream)
+result = rec.get_result(stream)
 print(f"Smoke test passed. Output on silence: {result!r}")
 PYEOF
 
