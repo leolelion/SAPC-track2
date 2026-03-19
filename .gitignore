@@ -1,3 +1,87 @@
+# =========================
+# 🐍 Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+**/venv/
+**/.venv/
+
+# =========================
+# 📦 Packaging / builds
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# =========================
+# 📊 Jupyter Notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# 🤖 ML Models / Weights
+# =========================
+weights/
+checkpoints/
+models/
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.onnx
+*.pb
+
+# =========================
+# 📈 Data (usually large)
+# =========================
+data/
+datasets/
+*.csv
+*.tsv
+*.parquet
+*.feather
+
+========================
+# 📉 Logs & outputs
+# =========================
+*.log
+logs/
+outputs/
+results/
+
+# =========================
+# 🔐 Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# 🖥️ OS / Editor junk
+# =========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# =========================
+# ⚙️ Misc
+# =========================
+*.bak
+*.tmp
+*.cache
+.cache/
 # Model weights
 **/weights/
 *.pt
