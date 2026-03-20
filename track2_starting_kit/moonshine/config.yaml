@@ -4,41 +4,25 @@
 #  All tunable settings live here. Edit values below to experiment,
 #  then re-run. No need to modify model.py.
 #
-#  Backend selection:
-#    version: "v1"  — useful-moonshine-onnx (ONNX, batch inference)
-#    version: "v2"  — moonshine-voice (C library + ONNX Runtime, streaming)
-#
-#  v1 model sizes:
-#    moonshine/tiny  (~30M params)  — fastest, lowest accuracy
-#    moonshine/base  (~100M params) — slower, better accuracy
-#
-#  v2 model variants (all English-only):
+#  Model variants (all English-only):
 #    tiny_streaming    Smallest, true streaming KV-cache, bundled in package
 #    base_streaming    Balanced quality, must download
 #    small_streaming   Moderate size, must download
 #    medium_streaming  Highest quality, must download
-#    tiny              Non-streaming batch (same as v1 tiny, bundled)
-#    base              Non-streaming batch (same as v1 base, must download)
+#    tiny              Non-streaming batch (bundled)
+#    base              Non-streaming batch (must download)
 #
-#  Partial inference note (v1):
-#    Moonshine v1 is not a frame-by-frame streaming model. Partial results
-#    require running full inference on the buffered audio so far.
-#    On CPU, tiny takes ~50–200 ms per utterance, so partial inference
-#    every 2 s is cheap enough to enable by default.
-#
-#  Partial inference note (v2 streaming variants):
+#  Partial inference note:
 #    True incremental KV-cache inference — each chunk processes only new
-#    audio, not the full buffer. partial_interval_chunks still controls
-#    how often we poll update_transcription() for partial results.
+#    audio, not the full buffer. partial_interval_chunks controls how
+#    often we poll update_transcription() for partial results.
 # =====================================================================
 
 # --- Model ---
 model:
-  name: "moonshine/tiny"            # v1 model: "moonshine/tiny" or "moonshine/base"
-  version: "v2"                     # "v1" = useful-moonshine-onnx, "v2" = moonshine-voice
-  v2_arch: "tiny_streaming"         # v2 arch: tiny_streaming, base_streaming,
-                                    #           small_streaming, medium_streaming,
-                                    #           tiny, base
+  v2_arch: "tiny_streaming"         # tiny_streaming, base_streaming,
+                                    # small_streaming, medium_streaming,
+                                    # tiny, base
 
 # --- Audio Input ---
 audio:
@@ -48,7 +32,5 @@ audio:
 streaming:
   partial_interval_chunks: 20       # Poll for partials every N chunks (N×100 ms).
                                     # 20 = every 2 s. 0 = disabled.
-                                    # v2: polls update_transcription() every N chunks.
-                                    # v1: re-runs full buffer inference every N chunks.
   min_chunks_for_partial: 10        # Require at least this many chunks before the
                                     # first partial (avoids very short bursts).
