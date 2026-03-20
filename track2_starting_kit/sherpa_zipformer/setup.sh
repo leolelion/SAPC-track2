@@ -88,10 +88,9 @@ case "${VARIANT}" in
     ;;
 
   small)
-    # ~20M params — smallest Zipformer, targeting embedded/Cortex-A7 devices
+    # ~20M params — streaming Zipformer, targeting embedded/Cortex-A7 devices
     # Much lower RTF than standard; accuracy recovers with fine-tuning on SAP data
-    # ⚠️  Filenames not verified — check actual repo contents before running
-    HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer-small-en-2023-06-26"
+    HF_REPO="csukuangfj/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17"
     FILES=(
       "encoder-epoch-99-avg-1.onnx"
       "decoder-epoch-99-avg-1.onnx"
@@ -139,7 +138,7 @@ PYEOF
       mv "joiner-epoch-99-avg-1-chunk-16-left-128.onnx"  joiner.onnx  2>/dev/null && echo "  Renamed joiner  → joiner.onnx"  || true
       ;;
     *)
-      # kroko/small: filenames not verified, fall back to glob rename
+      # kroko/small: epoch-suffix filenames — rename to canonical names
       for src in encoder-epoch-*.onnx; do [ -f "$src" ] && mv "$src" encoder.onnx && echo "  Renamed $src → encoder.onnx"; done || true
       for src in decoder-epoch-*.onnx; do [ -f "$src" ] && mv "$src" decoder.onnx && echo "  Renamed $src → decoder.onnx"; done || true
       for src in joiner-epoch-*.onnx;  do [ -f "$src" ] && mv "$src" joiner.onnx  && echo "  Renamed $src → joiner.onnx";  done || true
