@@ -20,9 +20,11 @@ Test utterances (synthetic, white-noise-based):
   - 10 s (100 chunks)
 
 macOS / Linux:
-  This script works on both. Install deps with:
-    pip install useful-moonshine-onnx omegaconf
-  First real run downloads ~50 MB (tiny) or ~150 MB (base) of ONNX weights.
+  This script works on both. Run setup.sh first, then:
+    python test_streaming.py
+  Or install deps manually:
+    pip install moonshine-voice omegaconf   # v2 (default)
+    pip install useful-moonshine-onnx omegaconf  # v1
 """
 
 import argparse
@@ -221,8 +223,17 @@ def run_utterance(model, duration_s: float, label: str) -> None:
 print(f"\nSAMPLE_RATE = {SAMPLE_RATE} Hz  |  CHUNK = {CHUNK_SAMPLES} samples (100 ms)")
 if not args.mock:
     import model as _m
-    print(f"model = {_m._config.model.name}  |  "
-          f"partial_interval_chunks = {_m._config.streaming.partial_interval_chunks}")
+    _ver = _m._version
+    if _ver == "v2":
+        try:
+            _arch = _m._config.model.v2_arch
+        except Exception:
+            _arch = "tiny_streaming"
+        print(f"backend = moonshine-voice (v2)  |  arch = {_arch}  |  "
+              f"partial_interval_chunks = {_m._config.streaming.partial_interval_chunks}")
+    else:
+        print(f"backend = useful-moonshine-onnx (v1)  |  model = {_m._config.model.name}  |  "
+              f"partial_interval_chunks = {_m._config.streaming.partial_interval_chunks}")
 
 for duration in [2.0, 5.0, 10.0]:
     run_utterance(model, duration, f"utterance {duration:.0f}s")
