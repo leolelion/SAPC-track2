@@ -32,10 +32,10 @@ echo "=== Sherpa-ONNX Zipformer setup (variant: ${VARIANT}) ==="
 # Stage 1: Install sherpa-onnx and omegaconf
 # -----------------------------------------------------------------------
 echo "--- Stage 1: pip install sherpa-onnx omegaconf ---"
-if python3 -c "import sherpa_onnx, omegaconf" 2>/dev/null; then
+if python3 -c "import sherpa_onnx, omegaconf, huggingface_hub" 2>/dev/null; then
   python3 -c "import sherpa_onnx; print('  Already installed — sherpa-onnx version:', sherpa_onnx.__version__)"
 else
-  pip install --no-cache-dir "sherpa-onnx>=1.10.0" "omegaconf>=2.3"
+  pip install --no-cache-dir "sherpa-onnx>=1.10.0" "omegaconf>=2.3" "huggingface_hub>=0.20"
   python3 -c "import sherpa_onnx; print('sherpa-onnx version:', sherpa_onnx.__version__)"
 fi
 
