@@ -316,6 +316,13 @@ class Model:
 
         # Accumulate all buffered audio into a single array
         audio = np.concatenate(self._audio_buffer)
+
+        # STFT requires signal length > n_fft (512). If not flushing, hold
+        # short audio in the buffer until enough accumulates.
+        n_fft = getattr(self._fbank._transform, "n_fft", 512)
+        if not flush and len(audio) <= n_fft:
+            self._audio_buffer = [audio]
+            return
         self._audio_buffer = []
 
         # Extract fbank features and append to feature buffer
