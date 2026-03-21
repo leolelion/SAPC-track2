@@ -1,0 +1,45 @@
+model:
+  # WeNet pretrained model: "librispeech" downloads the U2++ Conformer checkpoint.
+  # After fine-tuning, set jit_model_path and config_path to local files.
+  name: "librispeech"
+  jit_model_path: "weights/final.zip"
+  config_path: "weights/train.yaml"
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 1600  # 100ms at 16kHz
+
+streaming:
+  # Chunk size in encoder frames (after 4× subsampling).
+  # chunk_size=16 → 16 × 4 × 10ms = 640ms per encoder step
+  # chunk_size=8  → 320ms  (lower latency, slightly less accurate)
+  # chunk_size=4  → 160ms  (aggressive)
+  chunk_size: 16
+  # Number of left context chunks the encoder can attend to.
+  # -1 = unlimited (full left context)
+  num_left_chunks: -1
+  # How often to emit partial results (in 100ms input chunks)
+  partial_interval_chunks: 5
+  min_chunks_for_partial: 3
+  # Silence padding to flush remaining encoder frames at end
+  flush_padding_s: 0.3
+
+decoding:
+  # Method for streaming partials during accept_chunk()
+  # "ctc_greedy_search"        — fastest
+  # "ctc_prefix_beam_search"   — slower, better partials
+  streaming_method: "ctc_greedy_search"
+  # Method for final result at input_finished()
+  # "attention_rescoring"      — best (CTC beam search + attention decoder)
+  # "ctc_prefix_beam_search"   — if attention rescoring is too slow
+  final_method: "attention_rescoring"
+  # Beam size for CTC prefix beam search
+  beam_size: 10
+  # CTC weight for attention rescoring (0=pure attention, 1=pure CTC)
+  ctc_weight: 0.5
+  # Reverse weight for U2++ bidirectional decoder
+  reverse_weight: 0.3
+
+inference:
+  num_threads: 4
+  inference_mode: true
