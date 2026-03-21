@@ -28,10 +28,11 @@ macOS / Linux:
 """
 
 import argparse
+import csv
 import sys
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -49,6 +50,19 @@ parser.add_argument(
     type=int,
     default=None,
     help="Override config.streaming.partial_interval_chunks for this run.",
+)
+parser.add_argument(
+    "--manifest",
+    type=str,
+    default=None,
+    help="Path to a Dev manifest CSV (columns: audio_path or first col). "
+         "Runs the model on each real audio file and prints per-file timing.",
+)
+parser.add_argument(
+    "--max-files",
+    type=int,
+    default=None,
+    help="Limit number of files processed from --manifest (default: all).",
 )
 args = parser.parse_args()
 
@@ -223,21 +237,19 @@ def run_utterance(model, duration_s: float, label: str) -> None:
 print(f"\nSAMPLE_RATE = {SAMPLE_RATE} Hz  |  CHUNK = {CHUNK_SAMPLES} samples (100 ms)")
 if not args.mock:
     import model as _m
-    _ver = _m._version
-    if _ver == "v2":
-        try:
-            _arch = _m._config.model.v2_arch
-        except Exception:
-            _arch = "tiny_streaming"
-        print(f"backend = moonshine-voice (v2)  |  arch = {_arch}  |  "
-              f"partial_interval_chunks = {_m._config.streaming.partial_interval_chunks}")
-    else:
-        print(f"backend = useful-moonshine-onnx (v1)  |  model = {_m._config.model.name}  |  "
-              f"partial_interval_chunks = {_m._config.streaming.partial_interval_chunks}")
+    try:
+        _arch = _m._config.model.v2_arch
+    except Exception:
+        _arch = "tiny_streaming"
+    print(f"backend = moonshine-voice  |  arch = {_arch}  |  "
+          f"partial_interval_chunks = {_m._config.streaming.partial_interval_chunks}")
 
-for duration in [2.0, 5.0, 10.0]:
-    run_utterance(model, duration, f"utterance {duration:.0f}s")
+if args.manifest:
+    _run_manifest(model, args.manifest, max_files=args.max_files)
+else:
+    for duration in [2.0, 5.0, 10.0]:
+        run_utterance(model, duration, f"utterance {duration:.0f}s")
 
-print(f"\n{'=' * 60}")
-print("All tests passed.")
-print("=" * 60)
+    print(f"\n{'=' * 60}")
+    print("All tests passed.")
+    print("=" * 60)

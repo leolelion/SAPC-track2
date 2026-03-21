@@ -1,0 +1,30 @@
+model:
+  name: "nvidia/stt_en_fastconformer_hybrid_medium_streaming_80ms"
+  # Decoder to use for streaming inference. Options: "ctc", "rnnt"
+  # CTC is faster (non-autoregressive), RNNT is more accurate
+  decoder_type: "ctc"
+  # Cache-aware streaming context. The 80ms model was trained with [70, 13]:
+  # 70 left frames, 13 right frames (1 right frame = 80ms lookahead).
+  # Do not override — the encoder only accepts its trained value.
+  att_context_size: [70, 13]
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 1600  # 100ms at 16kHz
+
+streaming:
+  # How often to emit partial results (in chunks).
+  # 0 = emit after every chunk (lowest TTFT, highest CPU load)
+  # 5 = emit every 500ms (balanced)
+  # 10 = emit every 1s (lowest CPU load, higher TTFT)
+  partial_interval_chunks: 5
+  # Minimum chunks before first partial (avoid noisy early emissions)
+  min_chunks_for_partial: 3
+  # Silence padding (seconds) appended at input_finished() to flush encoder
+  flush_padding_s: 0.3
+
+inference:
+  # Number of CPU threads for torch inference
+  num_threads: 4
+  # Use torch.inference_mode() context
+  inference_mode: true
