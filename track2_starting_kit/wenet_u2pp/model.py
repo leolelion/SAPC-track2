@@ -30,11 +30,19 @@ import os
 import sys
 import glob as _glob
 
-_venv_candidates = _glob.glob(
-    os.path.join(os.path.dirname(__file__), "venv", "lib", "python3.*", "site-packages")
-)
-if _venv_candidates:
-    sys.path.insert(0, _venv_candidates[0])
+# Only inject venv if system torchaudio is not available (avoids version conflicts)
+try:
+    import torchaudio as _ta_check  # noqa: F401
+    _SYSTEM_TORCHAUDIO = True
+except ImportError:
+    _SYSTEM_TORCHAUDIO = False
+
+if not _SYSTEM_TORCHAUDIO:
+    _venv_candidates = _glob.glob(
+        os.path.join(os.path.dirname(__file__), "venv", "lib", "python3.*", "site-packages")
+    )
+    if _venv_candidates:
+        sys.path.insert(0, _venv_candidates[0])
 
 # =====================================================================
 # Section 2: Imports
@@ -106,13 +114,42 @@ def _load_vocabulary(weights_dir: Path) -> List[str]:
 
 
 def _load_global_cmvn(weights_dir: Path) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
-    """Load global CMVN mean and istd if the file exists."""
+    """Load global CMVN mean and istd if the file exists.
+
+    Supports both WeNet formats:
+      - JSON (is_json_cmvn: true): {"mean_stat": [...], "var_stat": [...], "frame_num": N}
+      - Plain text: two lines of space-separated floats (mean, then istd)
+    """
+    import json
+
     cmvn_path = weights_dir / "global_cmvn"
     if not cmvn_path.exists():
         return None
-    # WeNet global_cmvn format: two lines — mean and istd (space-separated floats)
+
     with open(cmvn_path) as f:
-        lines = [l.strip() for l in f if l.strip()]
+        content = f.read().strip()
+
+    # Try JSON format first (is_json_cmvn: true in train.yaml)
+    try:
+        cmvn_data = json.loads(content)
+        mean_stat = cmvn_data["mean_stat"]
+        var_stat = cmvn_data["var_stat"]
+        frame_num = cmvn_data["frame_num"]
+
+        # Some WeNet releases append the frame count as an 81st element
+        if len(mean_stat) == 81:
+            mean_stat = mean_stat[:80]
+            var_stat = var_stat[:80]
+
+        mean = torch.tensor([x / frame_num for x in mean_stat], dtype=torch.float32)
+        var = torch.tensor([x / frame_num for x in var_stat], dtype=torch.float32) - mean ** 2
+        istd = 1.0 / torch.sqrt(var.clamp(min=1e-20))
+        return mean, istd
+    except (json.JSONDecodeError, KeyError):
+        pass
+
+    # Fallback: plain-text format (two lines: mean, istd)
+    lines = [l for l in content.splitlines() if l.strip()]
     if len(lines) < 2:
         return None
     mean = torch.tensor([float(x) for x in lines[0].split()], dtype=torch.float32)
