@@ -24,29 +24,9 @@ To change settings, edit config.yaml (not this file).
 """
 
 # =====================================================================
-# Section 1: Venv Path Injection
+# Section 1: Imports
 # =====================================================================
 import os
-import sys
-import glob as _glob
-
-# Only inject venv if system torchaudio is not available (avoids version conflicts)
-try:
-    import torchaudio as _ta_check  # noqa: F401
-    _SYSTEM_TORCHAUDIO = True
-except ImportError:
-    _SYSTEM_TORCHAUDIO = False
-
-if not _SYSTEM_TORCHAUDIO:
-    _venv_candidates = _glob.glob(
-        os.path.join(os.path.dirname(__file__), "venv", "lib", "python3.*", "site-packages")
-    )
-    if _venv_candidates:
-        sys.path.insert(0, _venv_candidates[0])
-
-# =====================================================================
-# Section 2: Imports
-# =====================================================================
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
