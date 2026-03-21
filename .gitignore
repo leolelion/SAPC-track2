@@ -127,3 +127,4 @@ secrets.*
 .idea/
 .vscode/
 *.swp
+dev100_bundle/
