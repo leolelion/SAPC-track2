@@ -49,33 +49,28 @@ _config = OmegaConf.load(_DIR / "config.yaml")
 class _FbankExtractor:
     """Kaldi-compatible 80-dim log-fbank matching WeNet's training config.
 
-    Parameters match WeNet's default:
-      - 80-dim filter bank
-      - 25ms window, 10ms shift
-      - No dither at inference
-      - No CMVN applied here; handled separately if global_cmvn exists
+    Uses torchaudio.compliance.kaldi.fbank to match WeNet's training pipeline
+    exactly (Povey window, Kaldi mel filterbanks, same energy floor).
     """
 
     def __init__(self, sample_rate: int = 16000):
         self._sr = sample_rate
-        self._transform = torchaudio.transforms.MelSpectrogram(
-            sample_rate=sample_rate,
-            n_fft=512,
-            win_length=int(0.025 * sample_rate),   # 25ms
-            hop_length=int(0.010 * sample_rate),   # 10ms
-            n_mels=80,
-            window_fn=torch.hamming_window,
-            power=2.0,
-            normalized=False,
-            center=False,
-        )
 
     def __call__(self, audio: np.ndarray) -> torch.Tensor:
         """Return log-fbank features of shape (T, 80)."""
-        waveform = torch.from_numpy(audio).unsqueeze(0)  # (1, T)
-        mel = self._transform(waveform)                  # (1, 80, T_frames)
-        log_mel = torch.log(mel.clamp(min=1e-10))
-        return log_mel[0].T  # (T_frames, 80)
+        # Kaldi fbank expects waveform in PCM range [-32768, 32768]
+        waveform = torch.from_numpy(audio).unsqueeze(0) * 32768.0  # (1, T)
+        mat = torchaudio.compliance.kaldi.fbank(
+            waveform,
+            num_mel_bins=80,
+            frame_length=25,
+            frame_shift=10,
+            dither=0.0,
+            energy_floor=0.0,
+            sample_frequency=float(self._sr),
+            window_type="povey",
+        )
+        return mat  # (T_frames, 80)
 
 
 def _load_vocabulary(weights_dir: Path) -> List[str]:
@@ -336,8 +331,9 @@ class Model:
 
         # STFT requires signal length > n_fft (512). If not flushing, hold
         # short audio in the buffer until enough accumulates.
-        n_fft = getattr(self._fbank._transform, "n_fft", 512)
-        if not flush and len(audio) <= n_fft:
+        # Kaldi fbank needs at least one frame: win_length = 25ms = 400 samples
+        min_samples = int(0.025 * _config.audio.sample_rate)  # 400
+        if not flush and len(audio) < min_samples:
             self._audio_buffer = [audio]
             return
         self._audio_buffer = []
