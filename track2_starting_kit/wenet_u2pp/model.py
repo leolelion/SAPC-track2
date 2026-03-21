@@ -337,12 +337,26 @@ class Model:
         all_feats = torch.cat(self._feature_buffer, dim=0)  # (T_total, 80)
         n_frames = all_feats.size(0)
 
+        # Minimum frames the Conv2D subsampling (kernel 3, stride 2, ×2) needs
+        _MIN_FRAMES = 7
+
         # Process complete encoder chunks
-        while n_frames >= self._frames_per_chunk or (flush and n_frames > 0):
+        while n_frames >= self._frames_per_chunk or (flush and n_frames >= _MIN_FRAMES):
             take = min(n_frames, self._frames_per_chunk)
             chunk_feats = all_feats[:take]    # (frames_per_chunk, 80)
             all_feats = all_feats[take:]
             n_frames -= take
+
+            # Pad to full chunk size so the conv subsampling always sees
+            # enough time frames (zero-pad on the right, WeNet-style)
+            if chunk_feats.size(0) < self._frames_per_chunk:
+                pad = torch.zeros(
+                    self._frames_per_chunk - chunk_feats.size(0),
+                    chunk_feats.size(1),
+                    dtype=chunk_feats.dtype,
+                    device=chunk_feats.device,
+                )
+                chunk_feats = torch.cat([chunk_feats, pad], dim=0)
 
             self._run_encoder_chunk(chunk_feats)
 
