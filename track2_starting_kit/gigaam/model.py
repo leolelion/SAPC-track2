@@ -205,7 +205,11 @@ class Model:
                 wf.setsampwidth(2)
                 wf.setframerate(self.SAMPLE_RATE)
                 wf.writeframes(pcm.tobytes())
-            result = self._model.transcribe(tmp_path)
+            duration_s = len(audio) / self.SAMPLE_RATE
+            if duration_s > 30:
+                result = self._model.transcribe_longform(tmp_path)
+            else:
+                result = self._model.transcribe(tmp_path)
         finally:
             os.unlink(tmp_path)
 

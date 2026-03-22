@@ -23,7 +23,7 @@
 
 # --- Model ---
 model:
-  variant: "standard"             # "standard" | "kroko" | "small"
+  variant: "standard"
 
   # ONNX file names within weights/<variant>/ (usually unchanged)
   encoder_file: "encoder.onnx"

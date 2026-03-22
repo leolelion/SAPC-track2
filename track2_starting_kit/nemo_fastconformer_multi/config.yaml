@@ -1,0 +1,40 @@
+model:
+  name: "nvidia/stt_en_fastconformer_hybrid_large_streaming_multi"
+  # Decoder to use. Options: "ctc" (fast), "rnnt" (accurate)
+  decoder_type: "ctc"
+
+  # Multi-latency mode — this checkpoint was trained with multiple chunk sizes.
+  # Select one to use at inference time. Options:
+  #   "80ms"   — 8 encoder frames × 10ms = 80ms latency  (most aggressive, lowest accuracy)
+  #   "480ms"  — 48 encoder frames × 10ms = 480ms latency (balanced)
+  #   "1040ms" — 104 encoder frames × 10ms = 1040ms latency (most accurate, Zipformer-comparable)
+  #
+  # Pareto strategy: submit multiple entries using this same model at different latency modes.
+  # 80ms targets the latency-focused Pareto point; 1040ms targets the accuracy-focused point.
+  #
+  # CPU RTF guidance (estimated, needs verification):
+  #   80ms:   RTF ~0.3–0.5× (each encoder step is small)
+  #   480ms:  RTF ~0.4–0.6×
+  #   1040ms: RTF ~0.5–0.8×
+  #   (All are smaller than the 114M × RTF_per_param vs 32M model due to chunking)
+  latency_mode: "480ms"
+
+  # Left context size in encoder frames (how far back the encoder can attend).
+  # -1 = unlimited (full left context). Higher = better accuracy, more memory.
+  # For the multi model, the trained value depends on the latency mode.
+  # Set to null to use the model's default from setup_streaming_params().
+  left_context_frames: null
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 1600  # 100ms at 16kHz
+
+streaming:
+  # How often to emit partial results (in chunks).
+  partial_interval_chunks: 5
+  min_chunks_for_partial: 3
+  flush_padding_s: 0.3
+
+inference:
+  num_threads: 4
+  inference_mode: true

@@ -1,0 +1,26 @@
+model:
+  # torchaudio pipeline name — EMFORMER_RNNT_BASE_LIBRISPEECH is pre-installed
+  # with PyTorch/torchaudio in the competition Docker image (no extra install).
+  pipeline: "EMFORMER_RNNT_BASE_LIBRISPEECH"
+  # RNNT beam width for streaming decode. 1 = greedy (fastest), 5+ = beam search.
+  beam_width: 1
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 1600  # 100ms at 16kHz
+
+streaming:
+  # How often to emit partial results (in 100ms input chunks).
+  # 0 = emit after every encoder step (lowest TTFT, highest CPU load)
+  # 5 = emit every 500ms (balanced)
+  partial_interval_chunks: 5
+  # Minimum chunks before first partial (avoid noisy early emissions)
+  min_chunks_for_partial: 3
+  # Silence padding (seconds) appended at input_finished() to flush encoder.
+  flush_padding_s: 0.2
+
+inference:
+  # Number of CPU threads for torch inference
+  num_threads: 4
+  # Use torch.inference_mode() context
+  inference_mode: true

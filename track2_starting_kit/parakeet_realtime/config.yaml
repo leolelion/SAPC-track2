@@ -1,0 +1,41 @@
+model:
+  # Model name on HuggingFace / NeMo model zoo.
+  # Confirmed available (verified 2026-03-22):
+  #   nvidia/stt_en_fastconformer_transducer_large — 114M RNNT, setup_streaming_params() ✓
+  #
+  # NOTE: nvidia/parakeet-rnnt-0.12b is gated (requires HuggingFace access approval).
+  # If you have access, change name + model_class accordingly:
+  #   name: "nvidia/parakeet-rnnt-0.12b"
+  #   model_class: "EncDecRNNTBPEModel"
+  name: "nvidia/stt_en_fastconformer_transducer_large"
+
+  # NeMo model class to use. Options:
+  #   "EncDecRNNTBPEModel"           — pure RNNT (parakeet, this model)
+  #   "EncDecHybridRNNTCTCBPEModel"  — hybrid RNNT+CTC (nemo_fastconformer)
+  model_class: "EncDecRNNTBPEModel"
+
+  # Decoder to use for PARTIAL results (accept_chunk output).
+  # "ctc"  — fast, requires hybrid model (CTC head present)
+  # "rnnt" — accurate, works with pure RNNT, but re-decodes from scratch each partial
+  # This model has no CTC head, so must use "rnnt".
+  partial_decoder: "rnnt"
+
+  # Decoder to use for FINAL result (input_finished output).
+  decoder_type: "rnnt"
+
+audio:
+  sample_rate: 16000
+  chunk_samples: 1600  # 100ms at 16kHz
+
+streaming:
+  # How often to emit partial results (in chunks).
+  # Higher = less CPU load for partials (RNNT re-decode is expensive)
+  partial_interval_chunks: 10   # Every 1000ms to reduce partial decode cost
+  # Minimum chunks before first partial
+  min_chunks_for_partial: 5
+  # Silence padding at input_finished() to flush encoder right context
+  flush_padding_s: 0.3
+
+inference:
+  num_threads: 4
+  inference_mode: true
