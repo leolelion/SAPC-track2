@@ -11,6 +11,9 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
+echo "=== Emformer RNNT: installing sentencepiece ==="
+pip install --quiet sentencepiece
+
 echo "=== Emformer RNNT: checking torchaudio ==="
 python3 -c "
 import torchaudio
