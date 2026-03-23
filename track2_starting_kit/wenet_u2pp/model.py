@@ -33,13 +33,30 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import torchaudio
-from omegaconf import OmegaConf
+
+try:
+    from omegaconf import OmegaConf as _OmegaConf
+    def _load_config(path):
+        return _OmegaConf.load(path)
+except ImportError:
+    import yaml, types
+    def _load_config(path):
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        def _ns(d):
+            if isinstance(d, dict):
+                ns = types.SimpleNamespace()
+                for k, v in d.items():
+                    setattr(ns, k, _ns(v))
+                return ns
+            return d
+        return _ns(data)
 
 # =====================================================================
 # Section 3: Config
 # =====================================================================
 _DIR = Path(os.path.dirname(os.path.abspath(__file__)))
-_config = OmegaConf.load(_DIR / "config.yaml")
+_config = _load_config(_DIR / "config.yaml")
 
 
 # =====================================================================

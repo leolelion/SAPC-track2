@@ -1,9 +1,9 @@
 #!/bin/bash
 # WeNet U2++: download pretrained LibriSpeech U2++ Conformer weights.
-#
-# The RunPod competition image (xiuwenz2/sapc2-runtime) already has PyTorch,
-# torchaudio, and omegaconf installed — no venv or pip install needed.
 set -euo pipefail
+
+# Install omegaconf if missing (not present in all competition images)
+python3 -c "import omegaconf" 2>/dev/null || pip install -q omegaconf
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 WEIGHTS_DIR="${DIR}/weights"
