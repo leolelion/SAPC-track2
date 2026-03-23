@@ -42,4 +42,7 @@ decoding:
 
 inference:
   num_threads: 4
-  inference_mode: true
+  # inference_mode: true causes att_cache/cnn_cache tensors returned by the JIT model
+  # to have is_inference()=True, which breaks reuse as inputs in PyTorch 2.5.0 (RunPod).
+  # Use no_grad instead — same speed for CPU inference, works on all PyTorch versions.
+  inference_mode: false

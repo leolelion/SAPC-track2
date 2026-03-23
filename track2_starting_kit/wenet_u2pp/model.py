@@ -390,7 +390,7 @@ class Model:
         ctx = torch.inference_mode() if _config.inference.inference_mode else torch.no_grad()
         with ctx:
             try:
-                encoder_out, self._att_cache, self._cnn_cache = (
+                encoder_out, att_cache, cnn_cache = (
                     self._model.forward_encoder_chunk(
                         xs,
                         self._offset,
@@ -402,7 +402,7 @@ class Model:
             except Exception as e:
                 # Some WeNet versions have a slightly different signature;
                 # try without offset (offset handled internally)
-                encoder_out, self._att_cache, self._cnn_cache = (
+                encoder_out, att_cache, cnn_cache = (
                     self._model.forward_encoder_chunk(
                         xs,
                         torch.tensor(self._offset),
@@ -411,6 +411,15 @@ class Model:
                         self._cnn_cache,
                     )
                 )
+
+        # Clone to convert inference_mode tensors → regular tensors.
+        # In PyTorch 2.5.0, tensors returned from a JIT model inside
+        # inference_mode have is_inference()=True.  Passing them back as
+        # inputs on the next call inside inference_mode silently zeroes them
+        # out (PyTorch 2.5 bug), effectively resetting the cache each chunk.
+        # .clone() produces a standard tensor that works on all versions.
+        self._att_cache = att_cache.clone()
+        self._cnn_cache = cnn_cache.clone()
 
         # encoder_out: (1, T_enc, D)
         n_enc_frames = encoder_out.size(1)
