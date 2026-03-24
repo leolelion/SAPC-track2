@@ -132,3 +132,5 @@ dev_streaming_bundle/
 dev_streaming_bundle/
 
 test_*
+
+local_results/
