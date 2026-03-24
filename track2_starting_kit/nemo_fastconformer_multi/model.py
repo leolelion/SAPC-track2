@@ -130,12 +130,19 @@ class Model:
         # ── Load model ───────────────────────────────────────────────
         model_name = _config.model.name
         latency_mode = _config.model.latency_mode
-        print(f"Loading NeMo FastConformer Multi: {model_name} (latency={latency_mode}) …")
-
-        self._model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(
-            model_name=model_name,
-            map_location="cpu",
-        )
+        local_nemo = _DIR / "model.nemo"
+        if local_nemo.exists():
+            print(f"Loading NeMo FastConformer Multi from local file: {local_nemo} (latency={latency_mode})")
+            self._model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.restore_from(
+                restore_path=str(local_nemo),
+                map_location="cpu",
+            )
+        else:
+            print(f"Loading NeMo FastConformer Multi: {model_name} (latency={latency_mode}) …")
+            self._model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(
+                model_name=model_name,
+                map_location="cpu",
+            )
         self._model.eval()
         self._model.to("cpu")
 

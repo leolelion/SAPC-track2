@@ -115,11 +115,19 @@ class Model:
 
         # ── Load pretrained model ────────────────────────────────────
         model_name = _config.model.name
-        print(f"Loading NeMo FastConformer: {model_name} …")
-        self._model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(
-            model_name=model_name,
-            map_location="cpu",
-        )
+        local_nemo = _DIR / "model.nemo"
+        if local_nemo.exists():
+            print(f"Loading NeMo FastConformer from local file: {local_nemo}")
+            self._model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.restore_from(
+                restore_path=str(local_nemo),
+                map_location="cpu",
+            )
+        else:
+            print(f"Loading NeMo FastConformer: {model_name} (from HuggingFace) …")
+            self._model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(
+                model_name=model_name,
+                map_location="cpu",
+            )
         self._model.eval()
         self._model.to("cpu")
 
