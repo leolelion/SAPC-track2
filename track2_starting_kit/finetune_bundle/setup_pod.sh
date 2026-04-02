@@ -33,7 +33,31 @@ print(f'cuDNN:    {torch.backends.cudnn.version()}')
 # ══════════════════════════════════════════════
 echo ""
 echo "=== Step 2: Data check ==="
-SAPC2="/workspace/SAPC2/processed"
+
+# Auto-detect mount point (RunPod volumes mount at /runpod-volume by default)
+SAPC2=""
+for candidate in \
+    "${SAPC2_ROOT:-}" \
+    /runpod-volume/SAPC2/processed \
+    /workspace/SAPC2/processed \
+    /mnt/SAPC2/processed; do
+    if [ -n "${candidate}" ] && [ -d "${candidate}" ]; then
+        SAPC2="${candidate}"
+        echo "  Data found at: ${SAPC2}"
+        break
+    fi
+done
+
+if [ -z "${SAPC2}" ]; then
+    echo "  ERROR: SAPC2 data not found. Checked:"
+    echo "    /runpod-volume/SAPC2/processed"
+    echo "    /workspace/SAPC2/processed"
+    echo "    /mnt/SAPC2/processed"
+    echo ""
+    echo "  Override with: SAPC2_ROOT=/your/path bash setup_pod.sh"
+    echo "  Or check volume is attached in RunPod console (Storage tab)."
+    exit 1
+fi
 
 if [ -d "${SAPC2}/Train" ]; then
     SAMPLE=$(find "${SAPC2}/Train" -name "*.wav" | head -3 | wc -l)
@@ -61,6 +85,19 @@ done
 # ══════════════════════════════════════════════
 echo ""
 echo "=== Step 3: Install Python dependencies ==="
+
+# Upgrade PyTorch to 2.5.0+cu124 (required for k2/kaldifeat wheel compatibility)
+CURRENT_TORCH=$(python3 -c "import torch; print(torch.__version__)" 2>/dev/null || echo "none")
+if [[ "${CURRENT_TORCH}" != 2.5.0* ]]; then
+    echo "  Upgrading PyTorch: ${CURRENT_TORCH} → 2.5.0+cu124 ..."
+    pip install --quiet \
+        torch==2.5.0+cu124 \
+        torchaudio==2.5.0+cu124 \
+        --index-url https://download.pytorch.org/whl/cu124
+    echo "  PyTorch upgraded."
+else
+    echo "  PyTorch already at ${CURRENT_TORCH}, skipping upgrade."
+fi
 
 # Basic deps for data prep and training
 pip install --quiet lhotse omegaconf sentencepiece huggingface_hub
