@@ -1,0 +1,48 @@
+# finetune_config.yaml — Hyperparameters for streaming Zipformer finetuning on SAPC data.
+# Edit values here; finetune.py reads this via --config.
+
+training:
+  # ── Pretrained checkpoint ─────────────────────────────────────────────
+  pretrained_checkpoint: "finetuning/pretrained/exp/epoch-30.pt"
+  bpe_model:             "finetuning/pretrained/data/lang_bpe_500/bpe.model"
+
+  # ── Output ────────────────────────────────────────────────────────────
+  exp_dir: "finetuning/exp"
+
+  # ── Data ──────────────────────────────────────────────────────────────
+  train_cuts: "finetuning/data/cuts_train.jsonl.gz"
+  dev_cuts:   "finetuning/data/cuts_dev.jsonl.gz"
+
+  # ── Optimization ──────────────────────────────────────────────────────
+  base_lr:      0.0005      # Much lower than pretraining (~0.045)
+  warmup_steps: 500
+  num_epochs:   20
+  max_duration: 300         # Max total seconds of audio per batch (lhotse bucketing)
+
+  # ── Regularization ────────────────────────────────────────────────────
+  weight_decay:    1.0e-6
+  label_smoothing: 0.1
+
+  # ── Gradient ──────────────────────────────────────────────────────────
+  grad_clip:             5.0
+  accumulate_grad_steps: 4    # Effective batch = max_duration * 4 seconds
+
+  # ── Architecture (must match pretrained) ──────────────────────────────
+  chunk_size:          16    # 16 frames ≈ 320 ms per chunk
+  left_context_frames: 128
+  causal:              true  # Streaming mode
+
+  # ── Scheduler ─────────────────────────────────────────────────────────
+  lr_schedule: "eden"        # icefall's Eden scheduler
+
+  # ── Checkpointing ─────────────────────────────────────────────────────
+  save_every_n: 2            # Save checkpoint every N epochs
+  keep_last_k:  5            # Keep only the K most recent checkpoints
+
+  # ── Device ────────────────────────────────────────────────────────────
+  world_size: 1              # Single GPU on RunPod
+  num_workers: 4             # DataLoader workers
+
+  # ── Logging ───────────────────────────────────────────────────────────
+  log_interval: 50           # Log every N batches
+  valid_interval: 500        # Validate every N batches
