@@ -1,9 +1,9 @@
 #!/bin/bash
 
-POD_ID="ackq8p723wk02j"
+POD_ID="1ppb7l0i5xuna8"
 NOTIFY_TOPIC="runpod-free-gpu-alert"   # ← CHANGE THIS (see below)
 
-echo "🚀 Starting watcher for pod $POD_ID (retry every 60s)..."
+echo "🚀 Starting watcher for pod $POD_ID (retry every 30s)..."
 
 while true; do
     # Run the exact command you showed
@@ -23,7 +23,7 @@ while true; do
         # Optional: echo the error for logging
         # echo "$output"
     fi
-    sleep 60
+    sleep 30
 done
 
 echo "Watcher finished."

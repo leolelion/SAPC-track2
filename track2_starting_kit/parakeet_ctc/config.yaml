@@ -1,0 +1,19 @@
+model:
+  # HuggingFace model name (only used if weights/final.nemo is absent)
+  name: "scott-morgan-foundation/sapc2-track1-parakeet-ctc"
+
+audio:
+  sample_rate: 16000
+
+streaming:
+  # Emit a partial result every N chunks (1 chunk = 100ms). 0 = disable partials.
+  # Full re-encode on each partial — set high to limit overhead (20 = every 2s).
+  partial_interval_chunks: 20
+  # Minimum total chunks before emitting first partial (avoids blank partials)
+  min_chunks_for_partial: 10
+
+inference:
+  # Number of CPU threads for torch. -1 = let PyTorch decide.
+  num_threads: 4
+  # Use torch.inference_mode() (faster than no_grad, disables autograd entirely)
+  inference_mode: true

@@ -1,0 +1,46 @@
+# =====================================================================
+#  Streaming Pruned-Transducer-Stateless7 — Configuration
+#
+#  Checkpoints:
+#    libri_giga:   marcoyang/icefall-libri-giga-pruned-transducer-stateless7-streaming-2023-04-04
+#                  epoch-20-avg-4 (pretrained.pt)
+#    librispeech:  Zengwei/icefall-asr-librispeech-pruned-transducer-stateless7-streaming-2022-12-29
+#                  epoch-30-avg-9 (pretrained.pt)
+#
+#  Architecture differences vs streaming_zipformer:
+#    - Uses pruned_transducer_stateless7_streaming icefall recipe
+#    - Initial states: model.encoder.get_init_state(device) (no get_init_states fn)
+#    - Chunk param: decode_chunk_len (scalar, not string)
+#    - is_ready() check: >= decode_chunk_len + pad_length (no *2)
+#    - pad_length = 7 (vs 13 for zipformer)
+# =====================================================================
+
+# --- Model Variant ---
+model:
+  variant: librispeech             # Options: libri_giga | librispeech
+                                   #   libri_giga:   LibriSpeech + GigaSpeech co-trained
+                                   #   librispeech:  LibriSpeech-only
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000               # Sample rate in Hz
+
+# --- Encoder (Pruned-Transducer-Stateless7) ---
+encoder:
+  decode_chunk_len: 32             # Feature frames per chunk (32 ~ 320 ms)
+  num_left_chunks: 4               # How many left chunks the encoder can attend to
+
+# --- Decoder (Transducer Predictor) ---
+decoder:
+  context_size: 2                  # Number of previous tokens used as context
+
+# --- Feature Computation ---
+features:
+  mode: incremental                # Options: full | incremental
+                                   #   full:        Recompute all Fbank features each time
+                                   #   incremental: Only compute new features (lower latency)
+
+# --- Decoding Strategy ---
+decoding:
+  method: greedy_search            # Options: greedy_search | modified_beam_search
+  num_active_paths: 4              # Beam width (only used with beam search)
