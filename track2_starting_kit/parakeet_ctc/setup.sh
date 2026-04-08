@@ -26,32 +26,67 @@ if [ -z "$PYTHON" ]; then
 fi
 echo "Using Python: $($PYTHON --version)"
 
+# ── Find the active python in the venv (handles nested layout) ───────────────
+_find_venv_python() {
+    # Check direct layout: venv/bin/python3
+    if [ -f "${VENV}/bin/python3" ]; then
+        echo "${VENV}/bin/python3"
+        return
+    fi
+    # Check nested layout: venv/<name>/bin/python3
+    for nested in "${VENV}"/*/bin/python3; do
+        if [ -f "$nested" ]; then
+            echo "$nested"
+            return
+        fi
+    done
+}
+
+VENV_PYTHON="$(_find_venv_python)"
+
 # ── Step 1: Create venv (skip if NeMo already importable) ────────────────────
-if [ -d "${VENV}" ] && "${VENV}/bin/python3" -c "import nemo.collections.asr" &>/dev/null 2>&1; then
-    echo "=== NeMo already installed in ${VENV}, skipping venv setup ==="
+if [ -n "$VENV_PYTHON" ] && "$VENV_PYTHON" -c "import nemo.collections.asr" &>/dev/null 2>&1; then
+    echo "=== NeMo already installed at ${VENV_PYTHON}, skipping venv setup ==="
 else
     echo "=== Creating venv (--system-site-packages) at ${VENV} ==="
-    rm -rf "${VENV}"
+    rm -rf "${VENV}" 2>/dev/null || true
     "$PYTHON" -m venv --system-site-packages "${VENV}"
+
+    # Write a torch constraint file to prevent NeMo from upgrading torch
+    SYS_TORCH="$("${VENV}/bin/python3" -c 'import torch; print(torch.__version__.split("+")[0])' 2>/dev/null || echo '')"
+    CONSTRAINT_FILE=""
+    if [ -n "$SYS_TORCH" ]; then
+        CONSTRAINT_FILE="/tmp/torch_constraint_$$.txt"
+        echo "torch==${SYS_TORCH}" > "$CONSTRAINT_FILE"
+        echo "=== Pinning torch to system version: ${SYS_TORCH} ==="
+    fi
+
     "${VENV}/bin/pip" install --upgrade pip -q
 
     # ── Step 2: Install NeMo ─────────────────────────────────────────────────
     echo "=== Installing NeMo ASR from PyPI ==="
-    "${VENV}/bin/pip" install --no-cache-dir --prefer-binary \
-        "omegaconf>=2.3" \
-        "huggingface_hub>=0.24" \
-        sentencepiece \
-        "nemo_toolkit[asr]>=2.5.0" \
-        || echo "WARNING: nemo_toolkit[asr] did not fully install."
+    INSTALL_CMD=("${VENV}/bin/pip" install --no-cache-dir --prefer-binary
+        "omegaconf>=2.3"
+        "huggingface_hub>=0.24"
+        sentencepiece
+        "nemo_toolkit[asr]>=2.5.0")
+    if [ -n "$CONSTRAINT_FILE" ]; then
+        INSTALL_CMD+=(-c "$CONSTRAINT_FILE")
+    fi
+    "${INSTALL_CMD[@]}" || echo "WARNING: nemo_toolkit[asr] did not fully install."
+
+    [ -n "$CONSTRAINT_FILE" ] && rm -f "$CONSTRAINT_FILE"
 
     # Ensure base nemo is available even if extras failed
     "${VENV}/bin/python3" -c "import nemo" 2>/dev/null \
         || "${VENV}/bin/pip" install --no-cache-dir --prefer-binary "nemo_toolkit>=2.5.0"
+
+    VENV_PYTHON="$(_find_venv_python)"
 fi
 
 # ── Step 3: Verify NeMo ──────────────────────────────────────────────────────
 echo "=== Verifying NeMo installation ==="
-"${VENV}/bin/python3" -c "
+"$VENV_PYTHON" -c "
 import numpy, torch
 import nemo.collections.asr as nemo_asr
 print('NumPy:', numpy.__version__)
@@ -63,7 +98,7 @@ print('NeMo ASR: OK')
 if [ -f "${MODEL_FILE}" ]; then
     echo "=== Found ${MODEL_FILE} ($(du -sh "${MODEL_FILE}" | cut -f1)) ==="
     echo "=== Verifying weights load correctly ==="
-    "${VENV}/bin/python3" -c "
+    "$VENV_PYTHON" -c "
 import nemo.collections.asr as nemo_asr
 model = nemo_asr.models.EncDecCTCModelBPE.restore_from(
     restore_path='${MODEL_FILE}',
