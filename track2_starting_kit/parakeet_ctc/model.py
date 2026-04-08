@@ -41,6 +41,8 @@ import glob as _glob
 
 _venv_candidates = _glob.glob(
     os.path.join(os.path.dirname(__file__), "venv", "lib", "python3.*", "site-packages")
+) or _glob.glob(
+    os.path.join(os.path.dirname(__file__), "venv", "*", "lib", "python3.*", "site-packages")
 )
 if _venv_candidates:
     sys.path.insert(0, _venv_candidates[0])
