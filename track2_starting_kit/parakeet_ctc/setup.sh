@@ -26,24 +26,28 @@ if [ -z "$PYTHON" ]; then
 fi
 echo "Using Python: $($PYTHON --version)"
 
-# ── Step 1: Create venv ──────────────────────────────────────────────────────
-echo "=== Creating venv (--system-site-packages) at ${VENV} ==="
-rm -rf "${VENV}"
-"$PYTHON" -m venv --system-site-packages "${VENV}"
-"${VENV}/bin/pip" install --upgrade pip -q
+# ── Step 1: Create venv (skip if NeMo already importable) ────────────────────
+if [ -d "${VENV}" ] && "${VENV}/bin/python3" -c "import nemo.collections.asr" &>/dev/null 2>&1; then
+    echo "=== NeMo already installed in ${VENV}, skipping venv setup ==="
+else
+    echo "=== Creating venv (--system-site-packages) at ${VENV} ==="
+    rm -rf "${VENV}"
+    "$PYTHON" -m venv --system-site-packages "${VENV}"
+    "${VENV}/bin/pip" install --upgrade pip -q
 
-# ── Step 2: Install NeMo ─────────────────────────────────────────────────────
-echo "=== Installing NeMo ASR from PyPI ==="
-"${VENV}/bin/pip" install --no-cache-dir --prefer-binary \
-    "omegaconf>=2.3" \
-    "huggingface_hub>=0.24" \
-    sentencepiece \
-    "nemo_toolkit[asr]>=2.5.0" \
-    || echo "WARNING: nemo_toolkit[asr] did not fully install."
+    # ── Step 2: Install NeMo ─────────────────────────────────────────────────
+    echo "=== Installing NeMo ASR from PyPI ==="
+    "${VENV}/bin/pip" install --no-cache-dir --prefer-binary \
+        "omegaconf>=2.3" \
+        "huggingface_hub>=0.24" \
+        sentencepiece \
+        "nemo_toolkit[asr]>=2.5.0" \
+        || echo "WARNING: nemo_toolkit[asr] did not fully install."
 
-# Ensure base nemo is available even if extras failed
-"${VENV}/bin/python3" -c "import nemo" 2>/dev/null \
-    || "${VENV}/bin/pip" install --no-cache-dir --prefer-binary "nemo_toolkit>=2.5.0"
+    # Ensure base nemo is available even if extras failed
+    "${VENV}/bin/python3" -c "import nemo" 2>/dev/null \
+        || "${VENV}/bin/pip" install --no-cache-dir --prefer-binary "nemo_toolkit>=2.5.0"
+fi
 
 # ── Step 3: Verify NeMo ──────────────────────────────────────────────────────
 echo "=== Verifying NeMo installation ==="
