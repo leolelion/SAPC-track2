@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/pruned_transducer_stateless7_streaming/train.py)",
+      "Bash(wget -q -O - https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/pruned_transducer_stateless7_streaming/train.py)",
+      "Bash(wget -q -O - https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/pruned_transducer_stateless7_streaming/streaming_decode.py)",
+      "Bash(wget -q -O - https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/pruned_transducer_stateless7_streaming/decode_stream.py)",
+      "Bash(wget -q -O - https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/zipformer/train.py)",
+      "Bash(wget -q -O - https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/zipformer/streaming_decode.py)",
+      "Bash(wget -q -O - https://raw.githubusercontent.com/k2-fsa/icefall/master/egs/librispeech/ASR/zipformer/decode_stream.py)",
+      "Read(//tmp/**)",
+      "Read(//private/tmp/**)",
+      "Bash(chmod +x /Users/o/Development/SAPC-template/track2_starting_kit/streaming_pruned_stateless7/setup.sh)",
+      "Bash(python3 -c \"import k2; print\\('k2 ok'\\)\")",
+      "Bash(python3 -c \"import kaldifeat; print\\('kaldifeat ok'\\)\")",
+      "Bash(python3 -c \"import icefall; print\\('icefall ok'\\)\")",
+      "Bash(python3 -c \"import torch; print\\(torch.__version__\\); import platform; print\\(platform.machine\\(\\)\\)\")",
+      "Bash(mkdir -p local_results/streaming_pruned_stateless7_libri_giga)",
+      "Bash(python3 local_decode.py --submission-dir ./streaming_pruned_stateless7 --manifest-csv /Users/o/Development/SAPC-template/dev100_bundle/Dev_100_local.csv --data-root /Users/o/Development/SAPC-template/dev100_bundle --out-csv ./local_results/streaming_pruned_stateless7_libri_giga/Dev.predict.csv --out-partial-json ./local_results/streaming_pruned_stateless7_libri_giga/Dev.partial.json)",
+      "Bash(python3 -c ':*)",
+      "Bash(python3 -u -c ':*)",
+      "Bash(python3 -u test_streaming.py)",
+      "Bash(huggingface-cli whoami:*)",
+      "Bash(python3 -c \"import os; print\\(os.environ.get\\('HF_TOKEN', 'not set'\\)\\)\")",
+      "Bash(ls /Users/o/Development/SAPC-template/track2_starting_kit/nemo_fastconformer/venv/lib/python3.*/site-packages/nemo)",
+      "Bash(/Users/o/Development/SAPC-template/track2_starting_kit/nemo_fastconformer/venv/bin/python3 -c \"import nemo; print\\(nemo.__version__\\)\")",
+      "Bash(/Users/o/Development/SAPC-template/track2_starting_kit/nemo_fastconformer/venv/bin/python3 local_decode.py --submission-dir ./parakeet_ctc --manifest-csv /Users/o/Development/SAPC-template/dev100_bundle/manifest/Dev_100_local.csv --data-root /Users/o/Development/SAPC-template/dev100_bundle --out-csv /Users/o/Development/SAPC-template/local_results/parakeet_ctc_dev100.csv --out-partial-json /Users/o/Development/SAPC-template/local_results/parakeet_ctc_dev100_partial.json --skip-setup)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(git commit -m ':*)"
+    ]
+  }
+}
