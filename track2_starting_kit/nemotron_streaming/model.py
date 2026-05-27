@@ -154,6 +154,8 @@ class Model:
 
     # ----- Construction -----
     def __init__(self):
+        self._log_diagnostic_info()
+
         cfg_path = os.path.join(_DIR, "config.yaml")
         if os.path.exists(cfg_path):
             cfg = OmegaConf.load(cfg_path)
@@ -217,6 +219,68 @@ class Model:
         self._run_drain()
         self.compute_time_sec += (time.perf_counter() - t0)
         return self._last_emitted
+
+    # ----- CPU/host diagnostic (logged once at model load) -----
+    @staticmethod
+    def _log_diagnostic_info() -> None:
+        """Dump host CPU/memory + a small matmul benchmark.
+
+        Goal: definitively learn the eval VM's CPU spec from a real
+        submission. ~2 second overhead at model load. Output goes to
+        both stdout (ingestion captures it) and /tmp/cpu_diagnostic.json
+        if the FS is writable.
+        """
+        import json
+        import platform
+        import subprocess
+        import time
+        info: dict = {
+            "platform": platform.platform(),
+            "python_version": platform.python_version(),
+            "cpu_count_os": os.cpu_count(),
+        }
+        try:
+            info["cpu_count_sched"] = len(os.sched_getaffinity(0))
+        except Exception as e:
+            info["cpu_count_sched_error"] = str(e)
+        try:
+            info["lscpu"] = subprocess.check_output(["lscpu"], text=True, timeout=5)
+        except Exception as e:
+            info["lscpu_error"] = str(e)
+        try:
+            with open("/proc/cpuinfo") as f:
+                info["cpuinfo_head"] = "".join(f.readlines()[:50])
+        except Exception as e:
+            info["cpuinfo_error"] = str(e)
+        try:
+            info["meminfo"] = subprocess.check_output(["free", "-h"], text=True, timeout=5)
+        except Exception as e:
+            info["meminfo_error"] = str(e)
+        try:
+            import numpy as _np
+            x = _np.random.randn(1024, 1024).astype(_np.float32)
+            t0 = time.perf_counter()
+            for _ in range(20):
+                _ = x @ x
+            info["matmul_1024_20iter_ms"] = (time.perf_counter() - t0) * 1000
+        except Exception as e:
+            info["matmul_error"] = str(e)
+        info["uptime"] = None
+        try:
+            with open("/proc/uptime") as f:
+                info["uptime"] = f.read().strip()
+        except Exception:
+            pass
+        try:
+            info["loadavg"] = open("/proc/loadavg").read().strip()
+        except Exception:
+            pass
+        try:
+            with open("/tmp/cpu_diagnostic.json", "w") as f:
+                json.dump(info, f, indent=2, default=str)
+        except Exception as e:
+            info["diag_write_error"] = str(e)
+        print("[CPU_DIAGNOSTIC]", json.dumps(info, default=str), flush=True)
 
     # ----- Internal state -----
     def _reset_state(self):

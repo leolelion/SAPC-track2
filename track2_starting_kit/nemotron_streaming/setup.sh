@@ -33,11 +33,19 @@ echo "Using Python: $($PYTHON --version)"
 
 # ── Helper: find the active python inside the venv ──────────────────
 _find_venv_python() {
-    if [ -f "${VENV}/bin/python3" ]; then echo "${VENV}/bin/python3"; return; fi
-    for nested in "${VENV}"/*/bin/python3; do [ -f "$nested" ] && { echo "$nested"; return; }; done
+    if [ -f "${VENV}/bin/python3" ]; then echo "${VENV}/bin/python3"; return 0; fi
+    # Use nullglob so a non-matching pattern expands to nothing (under set -e).
+    local _shopt; _shopt=$(shopt -p nullglob 2>/dev/null || true)
+    shopt -s nullglob
+    local nested
+    for nested in "${VENV}"/*/bin/python3; do
+        if [ -f "$nested" ]; then echo "$nested"; eval "$_shopt"; return 0; fi
+    done
+    eval "$_shopt"
+    return 0
 }
 
-VENV_PYTHON="$(_find_venv_python)"
+VENV_PYTHON="$(_find_venv_python || true)"
 
 # ── Step 1: Create venv (skip if already populated) ────────────────
 if [ -n "$VENV_PYTHON" ] && \
