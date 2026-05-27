@@ -1,40 +1,45 @@
 #!/usr/bin/env python3
 """
-Nemotron Streaming ASR 0.6B — SAPC2 Track 2 Submission
-======================================================
+Nemotron Streaming ASR (ONNX, int8) — SAPC2 Track 2 Submission
+==============================================================
 
-Cache-aware streaming FastConformer-RNNT (nvidia/nemotron-speech-streaming-en-0.6b)
-with att_context_size=[70, 1] (160ms model chunks) on CPU, 4 threads.
+Wraps the danielbodart prebuilt int8 ONNX export of
+nvidia/nemotron-speech-streaming-en-0.6b in the SAPC2 5-method streaming
+interface. Cache-aware streaming FastConformer-RNNT at att_context_size
+=[70, 6] (560 ms model chunks).
 
-Streaming approach:
-  - accept_chunk() receives 100ms (1600 samples) from the SAPC2 harness
-  - Audio accumulates until enough mel frames exist for a model step
-  - conformer_stream_step() runs one encoder+decoder step with cache carry-forward
-  - Partial callback fires only when hypothesis text changes
+Layout:
+  weights/
+    encoder_model.onnx              int8 (danielbodart prebuilt)
+    encoder_model.onnx.data         external weights
+    decoder_model.onnx              fp32 (decoder + joint combined)
+    decoder_model.onnx.data         external weights
+    tokens.txt                      sentencepiece "<piece> <id>" lines
+  config.yaml                       runtime knobs
 
-Threading contract:
-  All five interface methods are called from the Decoder thread only.
-  _partial_callback is invoked exclusively from accept_chunk(), never from
-  input_finished() or any background thread. No locking required.
+Threading: SAPC2 spec guarantees all 5 methods are called from the
+Decoder thread only. The partial_callback runs from accept_chunk only.
+No locking required.
+
+RTF instrumentation: self.compute_time_sec accumulates wall time inside
+accept_chunk + input_finished, excluding the SAPC2 audio-arrival sleeps.
+This is the SAPC2 RTF denominator. Reset per utterance in reset().
 """
 
 # =====================================================================
-# Thread configuration — MUST happen before torch creates its threadpool
+# Section 1: Thread + venv setup (must come before any heavy imports)
 # =====================================================================
 import os
 import sys
 import glob as _glob
 
 _THREADS = int(os.environ.get("SAPC2_THREADS", "4"))
+os.environ.setdefault("OMP_NUM_THREADS", str(_THREADS))
+os.environ.setdefault("MKL_NUM_THREADS", str(_THREADS))
 
-import torch
+import numpy as np  # noqa: E402
 
-torch.set_num_threads(_THREADS)
-torch.set_num_interop_threads(1)
-
-# =====================================================================
-# Venv path injection (NeMo installed via setup.sh into a local venv)
-# =====================================================================
+# Pin venv if setup.sh installed one alongside this file.
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _venv_candidates = _glob.glob(
     os.path.join(_DIR, "venv", "lib", "python3.*", "site-packages")
@@ -44,281 +49,334 @@ _venv_candidates = _glob.glob(
 if _venv_candidates:
     sys.path.insert(0, _venv_candidates[0])
 
-# =====================================================================
-# Imports
-# =====================================================================
-import numpy as np
-from omegaconf import open_dict
+import torch  # noqa: E402
 
-from nemo.collections.asr.models import ASRModel
-from nemo.collections.asr.parts.utils.rnnt_utils import Hypothesis
+torch.set_num_threads(_THREADS)
+torch.set_num_interop_threads(1)
+
+import onnxruntime as ort  # noqa: E402
+from omegaconf import OmegaConf  # noqa: E402
 
 # =====================================================================
-# Constants
+# Section 2: Constants for att_context_size=[70, 6] / chunk_mel=56
+# These match danielbodart's config.json. If you ever switch
+# att_context_size, regenerate the ONNX and update these.
 # =====================================================================
 SAMPLE_RATE = 16000
-HOP_SAMPLES = 160        # 10ms hop at 16kHz
-WINDOW_SAMPLES = 400      # 25ms window at 16kHz
-ATT_CONTEXT_SIZE = [70, 1]
-HF_MODEL_NAME = "nvidia/nemotron-speech-streaming-en-0.6b"
+N_MELS = 128
+HOP_SAMPLES = 160       # 10 ms at 16 kHz
+WINDOW_SAMPLES = 400    # 25 ms at 16 kHz
+
+CHUNK_NEW = 56          # mel frames per encoder step
+CACHE_FRAMES = 9        # pre-encode cache mel frames
+ENC_INPUT_FRAMES = CHUNK_NEW + CACHE_FRAMES  # 65
+
+ENC_LAYERS = 24
+ENC_DIM = 1024
+LAST_CHANNEL_CACHE = 70
+LAST_TIME_FRAMES = 8
+
+DEC_LAYERS = 2
+DEC_HIDDEN = 640
+VOCAB_SIZE = 1025       # 1024 + blank
+BLANK_ID = 1024
+MAX_SYMBOLS_PER_FRAME = 10
 
 
-def _extract_text(transcribed):
-    """Extract text string from conformer_stream_step output."""
-    if not transcribed:
-        return ""
-    item = transcribed[0]
-    if isinstance(item, Hypothesis):
-        text = item.text or ""
-    else:
-        text = str(item) if item is not None else ""
-    # Strip whitespace, collapse double spaces
-    return " ".join(text.split())
+# =====================================================================
+# Section 3: Tokenizer (sentencepiece-style "<piece> <id>" file)
+# =====================================================================
+def _load_tokens(path: str):
+    vocab = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            piece, _, idx = line.rpartition(" ")
+            try:
+                vocab[int(idx)] = piece
+            except ValueError:
+                continue
+    return [vocab[i] for i in range(max(vocab) + 1)]
 
 
-def _min_samples_for_frames(n_frames):
-    """Conservative lower bound on audio samples needed to produce n_frames mel frames."""
-    if n_frames <= 0:
-        return 0
-    return (n_frames - 1) * HOP_SAMPLES + WINDOW_SAMPLES
+def _detokenize(tokens, vocab):
+    pieces = [vocab[t] for t in tokens if 0 <= t < len(vocab)]
+    text = "".join(pieces).replace("▁", " ").strip()
+    return text
 
 
+# =====================================================================
+# Section 4: NeMo mel preprocessor — load once at __init__
+# =====================================================================
+def _load_preprocessor():
+    """Build the deterministic Nemotron mel preprocessor."""
+    import nemo.collections.asr as _nemo_asr  # noqa: F401
+    from nemo.collections.asr.models import ASRModel
+
+    ref = ASRModel.from_pretrained(
+        "nvidia/nemotron-speech-streaming-en-0.6b", map_location="cpu"
+    )
+    pp = ref.preprocessor
+    pp.featurizer.dither = 0.0
+    pp.featurizer.pad_to = 0
+    pp.eval()
+    return pp
+
+
+# =====================================================================
+# Section 5: ORT session builder
+# =====================================================================
+def _make_session(path: str, num_threads: int) -> ort.InferenceSession:
+    so = ort.SessionOptions()
+    so.intra_op_num_threads = num_threads
+    so.inter_op_num_threads = 1
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    return ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
+
+
+# =====================================================================
+# Section 6: Model — SAPC2 5-method streaming interface
+# =====================================================================
 class Model:
-    """Cache-aware streaming ASR with Nemotron 0.6B."""
+    """Streaming ASR model wrapping the int8 Nemotron ONNX export.
 
+    Lifecycle (per SAPC2 ingestion):
+      m = Model()                       # load once
+      m.set_partial_callback(fn)        # once per evaluation pass
+      for each audio file:
+          m.reset()
+          for chunk in audio_chunks_100ms:
+              m.accept_chunk(chunk)
+          final_text = m.input_finished()
+    """
+
+    # ----- Construction -----
     def __init__(self):
-        print(f"Loading {HF_MODEL_NAME} (CPU, {_THREADS} threads) ...")
-
-        # ── Load model ──────────────────────────────────────────────
-        self._model = ASRModel.from_pretrained(HF_MODEL_NAME, map_location="cpu")
-        self._model.to("cpu")
-        self._model.eval()
-        for p in self._model.parameters():
-            p.requires_grad_(False)
-
-        # ── Set streaming context size ──────────────────────────────
-        self._model.encoder.set_default_att_context_size(ATT_CONTEXT_SIZE)
-        actual = self._model.encoder.att_context_size
-        assert actual == ATT_CONTEXT_SIZE, (
-            f"att_context_size mismatch: expected {ATT_CONTEXT_SIZE}, got {actual}"
-        )
-
-        # ── Configure greedy decoding ───────────────────────────────
-        decoding_cfg = self._model.cfg.decoding
-        with open_dict(decoding_cfg):
-            decoding_cfg.strategy = "greedy"
-            decoding_cfg.preserve_alignments = False
-            if hasattr(self._model, "joint"):
-                decoding_cfg.greedy.max_symbols = 10
-                decoding_cfg.fused_batch_size = -1
-        self._model.change_decoding_strategy(decoding_cfg)
-
-        # ── Configure preprocessor for streaming (deterministic) ────
-        self._model.preprocessor.featurizer.dither = 0.0
-        self._model.preprocessor.featurizer.pad_to = 0
-
-        # ── Read streaming config ───────────────────────────────────
-        cfg = self._model.encoder.streaming_cfg
-        self._chunk_size = cfg.chunk_size                    # [9, 16] mel frames
-        self._shift_size = cfg.shift_size                    # [9, 16]
-        self._pre_encode_cache = cfg.pre_encode_cache_size   # [0, 9]
-        self._drop_extra = cfg.drop_extra_pre_encoded        # 2
-        self._n_features = self._model.cfg.preprocessor.features  # 128 for nemotron
-
-        # Minimum frames for a chunk to produce encoder output after downsampling
-        # CacheAwareStreamingAudioBuffer uses this to skip too-short final chunks
-        subsampling = self._model.encoder.pre_encode
-        if hasattr(subsampling, 'get_sampling_frames'):
-            self._sampling_frames = subsampling.get_sampling_frames()  # [1, 8]
+        cfg_path = os.path.join(_DIR, "config.yaml")
+        if os.path.exists(cfg_path):
+            cfg = OmegaConf.load(cfg_path)
         else:
-            self._sampling_frames = None
+            cfg = OmegaConf.create({})
 
-        print(f"  streaming_cfg: chunk_size={list(self._chunk_size)}, "
-              f"shift_size={list(self._shift_size)}, "
-              f"pre_encode_cache={list(self._pre_encode_cache)}, "
-              f"drop_extra={self._drop_extra}")
-        print(f"  att_context_size={actual}, threads={_THREADS}")
+        weights_dir = os.path.join(_DIR, OmegaConf.select(cfg, "weights.dir", default="weights"))
+        encoder_path = os.path.join(weights_dir, OmegaConf.select(cfg, "weights.encoder", default="encoder_model.onnx"))
+        decoder_path = os.path.join(weights_dir, OmegaConf.select(cfg, "weights.decoder", default="decoder_model.onnx"))
+        tokens_path = os.path.join(weights_dir, OmegaConf.select(cfg, "weights.tokens", default="tokens.txt"))
+        num_threads = int(OmegaConf.select(cfg, "model.num_threads", default=_THREADS))
 
-        # ── Per-utterance state (initialized in reset) ──────────────
-        self._partial_callback = lambda _text: None
+        print(f"[nemotron_streaming] loading encoder: {encoder_path}", flush=True)
+        self._enc_sess = _make_session(encoder_path, num_threads)
+        print(f"[nemotron_streaming] loading decoder: {decoder_path}", flush=True)
+        self._dec_sess = _make_session(decoder_path, num_threads)
+        self._enc_out_names = [o.name for o in self._enc_sess.get_outputs()]
+        self._dec_out_names = [o.name for o in self._dec_sess.get_outputs()]
+
+        print(f"[nemotron_streaming] loading tokens: {tokens_path}", flush=True)
+        self._vocab = _load_tokens(tokens_path)
+
+        print(f"[nemotron_streaming] building preprocessor (NeMo, CPU) ...", flush=True)
+        self._preprocessor = _load_preprocessor()
+
+        self._partial_callback = lambda _t: None
         self._reset_state()
 
-    # -----------------------------------------------------------------
-    # Public interface (5 methods)
-    # -----------------------------------------------------------------
+        print(
+            f"[nemotron_streaming] ready (threads={num_threads}, "
+            f"chunk={CHUNK_NEW} mel, cache={CACHE_FRAMES} mel, blank={BLANK_ID})",
+            flush=True,
+        )
 
+    # ----- SAPC2 interface -----
     def set_partial_callback(self, callback) -> None:
         """Register callback for partial results: callback(text: str)."""
         self._partial_callback = callback
 
     def reset(self) -> None:
-        """Reset streaming state for a new audio file."""
+        """Reset state for a new audio file."""
         self._reset_state()
 
     def accept_chunk(self, audio_chunk: np.ndarray) -> str:
-        """Accept 100ms audio chunk (float32, 16kHz, mono). Return current hypothesis."""
+        """Feed one 100ms (1600 sample) float32 mono 16kHz chunk."""
+        import time
+        t0 = time.perf_counter()
+        if audio_chunk.dtype != np.float32:
+            audio_chunk = audio_chunk.astype(np.float32, copy=False)
         self._raw_chunks.append(audio_chunk)
         self._total_samples += len(audio_chunk)
         self._run_steps(is_final=False)
+        self.compute_time_sec += (time.perf_counter() - t0)
         return self._last_emitted
 
     def input_finished(self) -> str:
-        """Signal end of audio. Flush remaining frames and return final transcription."""
+        """Signal end of audio; flush remaining chunks and drain encoder."""
+        import time
+        t0 = time.perf_counter()
         self._run_steps(is_final=True)
+        self._run_drain()
+        self.compute_time_sec += (time.perf_counter() - t0)
         return self._last_emitted
 
-    # -----------------------------------------------------------------
-    # State management
-    # -----------------------------------------------------------------
-
+    # ----- Internal state -----
     def _reset_state(self):
         self._raw_chunks = []
         self._total_samples = 0
-        self._buffer_idx = 0       # current position in mel frames
+        self._buffer_idx = 0            # current position in mel frames
         self._step_num = 0
+        self._emitted_tokens = []
         self._last_emitted = ""
-
-        # Encoder cache
-        cache = self._model.encoder.get_initial_cache_state(batch_size=1)
-        self._cache_last_channel = cache[0]
-        self._cache_last_time = cache[1]
-        self._cache_last_channel_len = cache[2]
-        self._previous_hypotheses = None
-        self._pred_out_stream = None
-
-        # Feature cache (avoid redundant preprocessing)
-        self._cached_features = None
+        self._cached_mel = None
         self._cached_feat_len = 0
         self._cached_n_samples = 0
+        self._drain_done = False
+        # RTF instrumentation: pure compute time across the utterance,
+        # excluding any sleeps the harness inserts for audio arrival.
+        self.compute_time_sec = 0.0
+        # Encoder cache (rolling)
+        self._cache_lc = np.zeros((1, ENC_LAYERS, LAST_CHANNEL_CACHE, ENC_DIM), dtype=np.float32)
+        self._cache_lt = np.zeros((1, ENC_LAYERS, ENC_DIM, LAST_TIME_FRAMES), dtype=np.float32)
+        self._cache_ll = np.zeros((1,), dtype=np.int64)
+        # Decoder LSTM state (rolling)
+        self._dec_h = np.zeros((DEC_LAYERS, 1, DEC_HIDDEN), dtype=np.float32)
+        self._dec_c = np.zeros((DEC_LAYERS, 1, DEC_HIDDEN), dtype=np.float32)
+        self._last_token = np.array([[0]], dtype=np.int32)
+        self._target_length = np.array([1], dtype=np.int32)
 
-    # -----------------------------------------------------------------
-    # Streaming config accessors
-    # -----------------------------------------------------------------
+    @staticmethod
+    def _min_samples_for_frames(n_frames: int) -> int:
+        if n_frames <= 0:
+            return 0
+        return (n_frames - 1) * HOP_SAMPLES + WINDOW_SAMPLES
 
-    def _cfg_val(self, cfg_list, step):
-        """Return cfg_list[0] for step 0, cfg_list[1] otherwise (handles scalar too)."""
-        if isinstance(cfg_list, (list, tuple)):
-            return cfg_list[0] if step == 0 else cfg_list[1]
-        return cfg_list
+    def _ensure_features(self) -> None:
+        """(Re)compute mel features when more audio has arrived since last call."""
+        if not self._raw_chunks or self._cached_n_samples == self._total_samples:
+            return
+        all_audio = np.concatenate(self._raw_chunks)
+        audio_t = torch.from_numpy(all_audio).unsqueeze(0)
+        length_t = torch.tensor([len(all_audio)], dtype=torch.long)
+        with torch.inference_mode():
+            mel, mel_len = self._preprocessor(input_signal=audio_t, length=length_t)
+        self._cached_mel = mel[0].numpy().astype(np.float32)
+        self._cached_feat_len = int(mel_len.item())
+        self._cached_n_samples = self._total_samples
 
-    # -----------------------------------------------------------------
-    # Core streaming loop
-    # -----------------------------------------------------------------
-
-    def _run_steps(self, is_final=False):
-        """Run as many conformer_stream_step calls as current audio allows."""
+    def _run_steps(self, is_final: bool) -> None:
+        """Advance the encoder/decoder while enough mel frames are available."""
         if not self._raw_chunks:
             return
-
-        # Early exit: not enough audio for the next model step
-        cs = self._cfg_val(self._chunk_size, self._step_num)
-        needed_frames = self._buffer_idx + cs
-        needed_samples = _min_samples_for_frames(needed_frames)
-        if not is_final and self._total_samples < needed_samples:
+        if not is_final and self._total_samples < self._min_samples_for_frames(
+            self._buffer_idx + CHUNK_NEW
+        ):
+            return
+        self._ensure_features()
+        T = self._cached_feat_len
+        if T <= 0:
             return
 
-        # Preprocess all accumulated audio → mel features
-        if self._cached_n_samples != self._total_samples:
-            all_audio = np.concatenate(self._raw_chunks)
-            audio_t = torch.from_numpy(all_audio).unsqueeze(0)  # [1, T]
-            audio_len = torch.tensor([len(all_audio)], dtype=torch.long)
-            with torch.no_grad():
-                features, feat_len = self._model.preprocessor(
-                    input_signal=audio_t, length=audio_len
-                )
-            # features: [1, n_features, T_frames]
-            # feat_len: valid frame count (may be < T_frames due to padding)
-            self._cached_features = features
-            self._cached_feat_len = feat_len.item()
-            self._cached_n_samples = self._total_samples
-
-        total_frames = self._cached_feat_len
-
         while True:
-            cs = self._cfg_val(self._chunk_size, self._step_num)
-            ss = self._cfg_val(self._shift_size, self._step_num)
-            pcs = self._cfg_val(self._pre_encode_cache, self._step_num)
-
-            # Check if enough frames for this step
-            if self._buffer_idx + cs > total_frames:
-                if is_final and self._buffer_idx < total_frames:
-                    # Partial last chunk: use whatever remains, but only if
-                    # enough frames to produce encoder output after downsampling
-                    remaining = total_frames - self._buffer_idx
-                    if self._sampling_frames is not None:
-                        min_frames = self._cfg_val(self._sampling_frames, self._step_num)
-                        if remaining < min_frames:
-                            break  # Too short — matches CacheAwareStreamingAudioBuffer behavior
-                    cs = remaining
-                else:
+            chunk_end = self._buffer_idx + CHUNK_NEW
+            if chunk_end <= T:
+                mel_chunk = self._cached_mel[:, self._buffer_idx:chunk_end]
+                valid_in = CHUNK_NEW
+            elif is_final and self._buffer_idx < T:
+                # Final partial chunk: take what's left, pad to CHUNK_NEW.
+                remaining = T - self._buffer_idx
+                if remaining <= 0:
                     break
-
-            # Extract mel chunk [buffer_idx : buffer_idx + cs]
-            chunk_end = self._buffer_idx + cs
-            mel_chunk = self._cached_features[:, :, self._buffer_idx:chunk_end]
-
-            # Build pre-encode cache
-            if self._step_num == 0:
-                if pcs > 0:
-                    cache_pre = torch.zeros(
-                        1, self._n_features, pcs,
-                        device=mel_chunk.device, dtype=mel_chunk.dtype,
-                    )
-                else:
-                    cache_pre = mel_chunk.new_empty(1, self._n_features, 0)
+                mel_real = self._cached_mel[:, self._buffer_idx:T]
+                pad = np.zeros((N_MELS, CHUNK_NEW - remaining), dtype=np.float32)
+                mel_chunk = np.concatenate([mel_real, pad], axis=1)
+                valid_in = remaining
             else:
-                cache_start = max(0, self._buffer_idx - pcs)
-                cache_pre = self._cached_features[:, :, cache_start:self._buffer_idx]
-                if cache_pre.shape[2] < pcs:
-                    pad = torch.zeros(
-                        1, self._n_features, pcs - cache_pre.shape[2],
-                        device=mel_chunk.device, dtype=mel_chunk.dtype,
-                    )
-                    cache_pre = torch.cat([pad, cache_pre], dim=2)
-
-            # Assemble: [pre_encode_cache | new_mel_chunk]
-            full_chunk = torch.cat([cache_pre, mel_chunk], dim=2)
-            chunk_lengths = torch.tensor([full_chunk.shape[2]], dtype=torch.long)
-
-            # keep_all_outputs=True only on the very last step (signals decoder to finalize)
-            next_idx = self._buffer_idx + ss
-            keep_all = is_final and (next_idx >= total_frames)
-
-            # drop_extra_pre_encoded: 0 on step 0 (pad_and_drop_preencoded=False)
-            drop_extra = 0 if self._step_num == 0 else self._drop_extra
-
-            with torch.inference_mode():
-                (
-                    self._pred_out_stream,
-                    transcribed_texts,
-                    self._cache_last_channel,
-                    self._cache_last_time,
-                    self._cache_last_channel_len,
-                    self._previous_hypotheses,
-                ) = self._model.conformer_stream_step(
-                    processed_signal=full_chunk,
-                    processed_signal_length=chunk_lengths,
-                    cache_last_channel=self._cache_last_channel,
-                    cache_last_time=self._cache_last_time,
-                    cache_last_channel_len=self._cache_last_channel_len,
-                    keep_all_outputs=keep_all,
-                    previous_hypotheses=self._previous_hypotheses,
-                    previous_pred_out=self._pred_out_stream,
-                    drop_extra_pre_encoded=drop_extra,
-                    return_transcription=True,
-                )
-
-            text = _extract_text(transcribed_texts)
-
-            # Fire callback from accept_chunk only, when text changes
-            if not is_final and text != self._last_emitted:
-                self._partial_callback(text)
-            self._last_emitted = text
-
-            # Advance
-            self._buffer_idx += ss
-            self._step_num += 1
-
-            # Exit after partial last chunk
-            if is_final and chunk_end >= total_frames:
                 break
+
+            # Pre-encode cache: zeros at step 0, last 9 real mel at step k>0.
+            if self._step_num == 0:
+                cache_pre = np.zeros((N_MELS, CACHE_FRAMES), dtype=np.float32)
+            else:
+                start_c = max(0, self._buffer_idx - CACHE_FRAMES)
+                cache_pre = self._cached_mel[:, start_c:self._buffer_idx]
+                if cache_pre.shape[1] < CACHE_FRAMES:
+                    pad = np.zeros((N_MELS, CACHE_FRAMES - cache_pre.shape[1]), dtype=np.float32)
+                    cache_pre = np.concatenate([pad, cache_pre], axis=1)
+
+            chunk_input = np.concatenate([cache_pre, mel_chunk], axis=1)[None, :, :].astype(np.float32)
+            chunk_length = np.array([CACHE_FRAMES + valid_in], dtype=np.int64)
+
+            self._encode_and_decode(chunk_input, chunk_length, is_drain=False)
+
+            self._buffer_idx += CHUNK_NEW
+            self._step_num += 1
+            if is_final and chunk_end >= T:
+                break
+
+    def _run_drain(self) -> None:
+        """One extra all-zero chunk to flush the encoder's right-context."""
+        if self._drain_done or self._step_num == 0:
+            return
+        T = self._cached_feat_len
+        start_c = max(0, T - CACHE_FRAMES)
+        cache_real = self._cached_mel[:, start_c:T]
+        if cache_real.shape[1] < CACHE_FRAMES:
+            pad = np.zeros((N_MELS, CACHE_FRAMES - cache_real.shape[1]), dtype=np.float32)
+            cache_real = np.concatenate([pad, cache_real], axis=1)
+        new_chunk = np.zeros((N_MELS, CHUNK_NEW), dtype=np.float32)
+        chunk_input = np.concatenate([cache_real, new_chunk], axis=1)[None, :, :].astype(np.float32)
+        chunk_length = np.array([CACHE_FRAMES + CHUNK_NEW], dtype=np.int64)
+        self._encode_and_decode(chunk_input, chunk_length, is_drain=True)
+        self._drain_done = True
+
+    def _encode_and_decode(self, chunk_input: np.ndarray, chunk_length: np.ndarray, *, is_drain: bool) -> None:
+        """Run one encoder step + RNN-T greedy decode + emit partial."""
+        enc_outs = self._enc_sess.run(
+            None,
+            {
+                "audio_signal": chunk_input,
+                "length": chunk_length,
+                "cache_last_channel": self._cache_lc,
+                "cache_last_time": self._cache_lt,
+                "cache_last_channel_len": self._cache_ll,
+            },
+        )
+        named = dict(zip(self._enc_out_names, enc_outs))
+        encoder_out = named["outputs"]
+        n_enc = int(named["encoded_lengths"][0])
+        for n, v in named.items():
+            ln = n.lower()
+            if "cache_last_channel" in ln and ("_len" in ln or "_length" in ln):
+                self._cache_ll = v
+            elif "cache_last_channel" in ln and "next" in ln:
+                self._cache_lc = v
+            elif "cache_last_time" in ln and "next" in ln:
+                self._cache_lt = v
+
+        for f_idx in range(n_enc):
+            enc_frame = encoder_out[:, :, f_idx:f_idx + 1]
+            for _sym in range(MAX_SYMBOLS_PER_FRAME):
+                dec_outs = self._dec_sess.run(
+                    None,
+                    {
+                        "encoder_outputs": enc_frame,
+                        "targets": self._last_token,
+                        "target_length": self._target_length,
+                        "input_states_1": self._dec_h,
+                        "input_states_2": self._dec_c,
+                    },
+                )
+                dnamed = dict(zip(self._dec_out_names, dec_outs))
+                logits = dnamed["outputs"]  # [B, 1, 1, vocab]
+                token = int(np.argmax(logits[0, 0, 0]))
+                if token == BLANK_ID:
+                    break
+                self._emitted_tokens.append(token)
+                self._last_token = np.array([[token]], dtype=np.int32)
+                self._dec_h = dnamed["output_states_1"]
+                self._dec_c = dnamed["output_states_2"]
+
+        text = _detokenize(self._emitted_tokens, self._vocab)
+        text = " ".join(text.split())
+        if not is_drain and text != self._last_emitted:
+            self._partial_callback(text)
+        self._last_emitted = text

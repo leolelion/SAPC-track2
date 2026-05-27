@@ -30,7 +30,28 @@ Approximate sclite re-score of our fresh export would be ~25–26% CER, still ~1
 
 **Parked.** Not blocking Phase 2 — Phase 2 will re-export from .nemo with k-quant tooling (Olive) anyway, so we naturally get a chance to investigate during that work. If we close the gap, document the fix here. If not, ship int8/int4 k-quant on top of *our* fresh export and note the residual delta.
 
-## See also
+## Open mystery: danielbodart int8 outperforms FP32 by 1.7 CER
+
+On dysarthric Dev_streaming, danielbodart's int8-dynamic/int8-static variants
+(CER 22.72) outperform their own FP32 (CER 24.45) by 1.7 CER points. Same
+encoder weights, same harness, same audio. Our own MatMulNBits int8 k-quant
+matches FP32 (CER 24.61), so the "regularization" effect is specific to
+danielbodart's quantization path.
+
+**Likely mechanisms** (none verified, all speculative):
+- Operator fusion: ORT's standard int8 dynamic/static via MatMulInteger may
+  trigger different fused kernels than MatMulNBits (weight-only).
+- Activation quantization granularity: their int8 quantizes activations
+  too (dynamic per-tensor), not just weights. The activation quantization
+  may act as input noise that helps generalize on noisy dysarthric features.
+- Static calibration data: int8-static was calibrated with warm-cache mel
+  features. If their calibration set happened to match dysarthric
+  distribution better than the original training set, calibration biases
+  toward dysarthric features.
+
+**Investigate if/when** we finetune the encoder and need to re-quantize.
+At that point we re-quantize the finetuned encoder and can A/B the two
+paths fairly on the same weights.
 
 - danielbodart's export pipeline: `https://github.com/danielbodart/nemotron-speech-600m-onnx/blob/main/nemo_export_onnx.py`
 - Our export script: `scripts/nemotron_bench/phase1a_export_streaming.py`

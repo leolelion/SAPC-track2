@@ -1,27 +1,29 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =====================================================================
-# Nemotron Streaming 0.6B — Environment Setup
+# Nemotron Streaming (ONNX, int8) — Environment Setup
 #
-# Installs NeMo ASR into a local venv (inheriting system PyTorch 2.5.0)
-# and pre-downloads model weights from HuggingFace with a pinned revision.
+# Installs ORT + NeMo (preprocessor only) into a local venv and downloads
+# danielbodart's int8-static ONNX bundle from HuggingFace.
 #
-# Runtime: xiuwenz2/sapc2-runtime:latest (PyTorch 2.5.0+cu124, Python 3.11)
+# Runtime target: xiuwenz2/sapc2-runtime:latest (PyTorch 2.5.0+cu124,
+# Python 3.11).
 # =====================================================================
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV="${DIR}/venv"
+WEIGHTS="${DIR}/weights"
 
-HF_MODEL="nvidia/nemotron-speech-streaming-en-0.6b"
-HF_REVISION="ac0580bb7d3d6e39c4361db6afe28db9211793e4"
+HF_REPO="danielbodart/nemotron-speech-600m-onnx"
+HF_REVISION="03c03d7b9fd16e3cdd5c147f1bd4ad2242aafa75"
+VARIANT="int8-static"     # int8-static | int8-dynamic | fp32 | fp16
 
-# ── Find Python 3.10 or 3.11 (NeMo requirement) ────────────────────
+mkdir -p "$WEIGHTS"
+
+# ── Find Python 3.10 or 3.11 (NeMo requirement) ─────────────────────
 PYTHON=""
 for candidate in python3.11 python3.10; do
-    if command -v "$candidate" &>/dev/null; then
-        PYTHON="$candidate"
-        break
-    fi
+    if command -v "$candidate" &>/dev/null; then PYTHON="$candidate"; break; fi
 done
 if [ -z "$PYTHON" ]; then
     echo "ERROR: NeMo requires Python 3.10 or 3.11."
@@ -31,101 +33,101 @@ echo "Using Python: $($PYTHON --version)"
 
 # ── Helper: find the active python inside the venv ──────────────────
 _find_venv_python() {
-    if [ -f "${VENV}/bin/python3" ]; then
-        echo "${VENV}/bin/python3"
-        return
-    fi
-    for nested in "${VENV}"/*/bin/python3; do
-        if [ -f "$nested" ]; then
-            echo "$nested"
-            return
-        fi
-    done
+    if [ -f "${VENV}/bin/python3" ]; then echo "${VENV}/bin/python3"; return; fi
+    for nested in "${VENV}"/*/bin/python3; do [ -f "$nested" ] && { echo "$nested"; return; }; done
 }
 
 VENV_PYTHON="$(_find_venv_python)"
 
-# ── Step 1: Create venv and install NeMo (skip if already done) ─────
-if [ -n "$VENV_PYTHON" ] && "$VENV_PYTHON" -c "import nemo.collections.asr" &>/dev/null 2>&1; then
-    echo "=== NeMo already installed at ${VENV_PYTHON}, skipping venv setup ==="
+# ── Step 1: Create venv (skip if already populated) ────────────────
+if [ -n "$VENV_PYTHON" ] && \
+   "$VENV_PYTHON" -c "import onnxruntime, nemo.collections.asr" &>/dev/null 2>&1; then
+    echo "=== venv already populated, skipping install ==="
 else
     echo "=== Creating venv (--system-site-packages) at ${VENV} ==="
     rm -rf "${VENV}" 2>/dev/null || true
     "$PYTHON" -m venv --system-site-packages "${VENV}"
 
-    # Pin torch to the system version so NeMo doesn't upgrade it
     SYS_TORCH="$("${VENV}/bin/python3" -c 'import torch; print(torch.__version__.split("+")[0])' 2>/dev/null || echo '')"
-    CONSTRAINT_FILE=""
+    CONSTRAINT=""
     if [ -n "$SYS_TORCH" ]; then
-        CONSTRAINT_FILE="/tmp/torch_constraint_$$.txt"
-        echo "torch==${SYS_TORCH}" > "$CONSTRAINT_FILE"
+        CONSTRAINT="/tmp/torch_constraint_$$.txt"
+        echo "torch==${SYS_TORCH}" > "$CONSTRAINT"
         echo "=== Pinning torch to system version: ${SYS_TORCH} ==="
     fi
 
     "${VENV}/bin/pip" install --upgrade pip -q
 
-    echo "=== Installing NeMo ASR ==="
+    echo "=== Installing ORT + NeMo (preprocessor only) ==="
     INSTALL_CMD=("${VENV}/bin/pip" install --no-cache-dir --prefer-binary
+        "numpy<2"
         "omegaconf>=2.3"
         "huggingface_hub>=0.24"
         sentencepiece
-        "numpy<2"
-        "nemo_toolkit[asr]>=2.5.0")
-    if [ -n "$CONSTRAINT_FILE" ]; then
-        INSTALL_CMD+=(-c "$CONSTRAINT_FILE")
-    fi
-    "${INSTALL_CMD[@]}" || echo "WARNING: nemo_toolkit[asr] install had issues."
+        onnxruntime
+        onnx
+        "nemo_toolkit[asr]>=2.5.0,<2.6")
+    [ -n "$CONSTRAINT" ] && INSTALL_CMD+=(-c "$CONSTRAINT")
+    "${INSTALL_CMD[@]}" || echo "WARNING: nemo_toolkit[asr] install had issues; trying base"
+    [ -n "$CONSTRAINT" ] && rm -f "$CONSTRAINT"
 
-    [ -n "$CONSTRAINT_FILE" ] && rm -f "$CONSTRAINT_FILE"
-
-    # Fallback: ensure base nemo is available
-    "${VENV}/bin/python3" -c "import nemo" 2>/dev/null \
-        || "${VENV}/bin/pip" install --no-cache-dir --prefer-binary "nemo_toolkit>=2.5.0"
-
+    "${VENV}/bin/python3" -c "import onnxruntime, nemo.collections.asr" \
+        || { echo "ERROR: env didn't install correctly"; exit 1; }
     VENV_PYTHON="$(_find_venv_python)"
 fi
 
-# ── Step 2: Verify NeMo installation ────────────────────────────────
-echo "=== Verifying NeMo ==="
-"$VENV_PYTHON" -c "
-import numpy, torch
-import nemo.collections.asr as nemo_asr
-print('NumPy:', numpy.__version__)
-print('Torch:', torch.__version__)
-print('NeMo ASR: OK')
-"
+# ── Step 2: Download danielbodart prebuilt ONNX (${VARIANT}) ─────────
+NEED_DOWNLOAD=0
+for f in encoder_model.onnx encoder_model.onnx.data \
+         decoder_model.onnx decoder_model.onnx.data tokens.txt; do
+    [ -f "${WEIGHTS}/${f}" ] || NEED_DOWNLOAD=1
+done
 
-# ── Step 3: Pre-download model weights (pinned revision) ────────────
-echo "=== Downloading model: ${HF_MODEL} @ ${HF_REVISION} ==="
-"$VENV_PYTHON" -c "
-from huggingface_hub import snapshot_download
-path = snapshot_download(
-    '${HF_MODEL}',
-    revision='${HF_REVISION}',
-)
-print(f'Cached at: {path}')
-"
+if [ "$NEED_DOWNLOAD" -eq 0 ]; then
+    echo "=== Weights already present in ${WEIGHTS}, skipping download ==="
+else
+    echo "=== Downloading ${HF_REPO} @ ${HF_REVISION} (${VARIANT}) ==="
+    "$VENV_PYTHON" - <<PYEOF
+from huggingface_hub import hf_hub_download
+import shutil, os
 
-# ── Step 4: Verify model loads correctly ─────────────────────────────
+repo = "${HF_REPO}"
+rev = "${HF_REVISION}"
+variant = "${VARIANT}"
+weights = "${WEIGHTS}"
+
+files = [
+    (f"{variant}/encoder_model.onnx", "encoder_model.onnx"),
+    (f"{variant}/encoder_model.onnx.data", "encoder_model.onnx.data"),
+    (f"{variant}/decoder_model.onnx", "decoder_model.onnx"),
+    (f"{variant}/decoder_model.onnx.data", "decoder_model.onnx.data"),
+    ("shared/tokens.txt", "tokens.txt"),
+]
+for src, dst in files:
+    print(f"  fetching {src} -> {dst}")
+    p = hf_hub_download(repo_id=repo, revision=rev, filename=src)
+    out = os.path.join(weights, dst)
+    # Copy through symlink (HF cache uses symlinks) so onnx loader accepts it.
+    shutil.copy(p, out)
+print(f"All weights placed in {weights}")
+PYEOF
+fi
+
+# ── Step 3: Verify model loads + smoke test on silence ──────────────
 echo "=== Verifying model loads ==="
 "$VENV_PYTHON" -c "
-import torch
-torch.set_num_threads(1)
-from nemo.collections.asr.models import ASRModel
-
-model = ASRModel.from_pretrained('${HF_MODEL}', map_location='cpu')
-model.encoder.set_default_att_context_size([70, 1])
-
-params = sum(p.numel() for p in model.parameters()) / 1e6
-cfg = model.encoder.streaming_cfg
-print(f'Model: {params:.1f}M params')
-print(f'att_context_size: {model.encoder.att_context_size}')
-print(f'streaming_cfg.chunk_size: {cfg.chunk_size}')
-print(f'streaming_cfg.shift_size: {cfg.shift_size}')
-print(f'streaming_cfg.pre_encode_cache_size: {cfg.pre_encode_cache_size}')
-print(f'streaming_cfg.drop_extra_pre_encoded: {cfg.drop_extra_pre_encoded}')
-del model
-import gc; gc.collect()
+import os, sys, numpy as np
+sys.path.insert(0, '${DIR}')
+from model import Model
+m = Model()
+m.set_partial_callback(lambda t: None)
+m.reset()
+chunk = np.zeros(1600, dtype=np.float32)
+for _ in range(6):
+    m.accept_chunk(chunk)
+result = m.input_finished()
+print(f'Smoke test passed. Output on silence: {result!r}')
+print(f'compute_time_sec: {m.compute_time_sec:.3f}s')
 "
 
 echo "=== setup.sh complete ==="
