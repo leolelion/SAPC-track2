@@ -92,14 +92,25 @@ def cmd_board(args):
         "Gate = SAPC2 Track 2 hard constraint RTF < 1.0. "
         "Streaming latency (TTFT/TTLT) only meaningful for true streaming runs.",
         "",
+        "TTLT cells with `†` suffix were measured on a contended shared host "
+        "(see entry's `latency_environment` field) and are reliable for **relative** "
+        "comparison between variants only, **not** for absolute submission gating. "
+        "TTFT on the same host is absolute-reliable (large enough baseline that jitter "
+        "is not material). Absolute TTLT requires a dedicated-CPU host or the Codabench "
+        "eval VM.",
+        "",
         "| Dataset | Model | WER% | CER% | TTFT P50 ms | TTLT P50 ms | RTF | Gate | Date | Commit | Verified |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         gate = {True: "PASS", False: "**FAIL**", None: "—"}[r.get("rtf_gate")]
+        ttlt_cell = _fmt(r.get("ttlt_p50_ms"))
+        env = r.get("latency_environment") or {}
+        if env.get("ttlt_reliability") == "relative_only" and r.get("ttlt_p50_ms") is not None:
+            ttlt_cell = f"{ttlt_cell}†"
         lines.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
             _fmt(r.get("dataset")), _fmt(r.get("model")), _fmt(r.get("wer")),
-            _fmt(r.get("cer")), _fmt(r.get("ttft_p50_ms")), _fmt(r.get("ttlt_p50_ms")),
+            _fmt(r.get("cer")), _fmt(r.get("ttft_p50_ms")), ttlt_cell,
             _fmt(r.get("rtf")), gate, _fmt(r.get("date")), _fmt(r.get("git_commit")),
             "yes" if r.get("verified") else "**NO**"))
     with open(BOARD, "w") as f:
