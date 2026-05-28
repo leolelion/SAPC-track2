@@ -134,3 +134,6 @@ dev_streaming_bundle/
 test_*
 
 local_results/
+
+# local mirror of pod /workspace/phase4b artifacts (re-fetchable)
+scripts/nemotron_bench/dev10k_data/
