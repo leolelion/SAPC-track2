@@ -17,12 +17,22 @@ def score(ids, hyps, refs1, refs2):
     ws = wd = wi = wr = 0
     cs = cd = ci = cr = 0
     n_empty = 0
+    n_skip = 0
     for uid in ids:
         h = norm(hyps[uid])
         r1 = norm(refs1[uid])
         r2 = norm(refs2[uid])
         if not h:
             n_empty += 1
+        if not r1 and not r2:
+            n_skip += 1
+            continue
+        # Treat empty ref as "all hyp tokens are insertions". jiwer can't
+        # handle empty references; replace with the other ref if empty.
+        if not r1:
+            r1 = r2
+        if not r2:
+            r2 = r1
         o1 = jiwer.process_words(r1, h)
         o2 = jiwer.process_words(r2, h)
         if (o1.substitutions + o1.deletions + o1.insertions) <= (
