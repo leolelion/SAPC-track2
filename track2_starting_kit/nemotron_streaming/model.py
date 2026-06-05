@@ -214,11 +214,19 @@ class Model:
         self._partial_callback = lambda _t: None
         self._reset_state()
 
+        # ── Memory-usage instrumentation (telemetry; eval-VM diagnostic) ──
+        # Per-utt counter and atexit hook so the FINAL input_finished is
+        # always covered, even if it doesn't land on a periodic milestone.
+        self._utt_counter = 0
+        import atexit
+        atexit.register(self._log_mem, "atexit_final")
+
         print(
             f"[nemotron_streaming] ready (threads={num_threads}, "
             f"chunk={CHUNK_NEW} mel, cache={CACHE_FRAMES} mel, blank={BLANK_ID})",
             flush=True,
         )
+        self._log_mem("init_done")
 
     # ----- SAPC2 interface -----
     def set_partial_callback(self, callback) -> None:
@@ -228,6 +236,25 @@ class Model:
     def reset(self) -> None:
         """Reset state for a new audio file."""
         self._reset_state()
+
+    # ----- Memory telemetry -----
+    @staticmethod
+    def _peak_rss_mb() -> float:
+        """Peak RSS in MB. On Linux ru_maxrss is in KB; on macOS in bytes.
+        Codabench runs Linux so KB is the expected interpretation."""
+        try:
+            import resource
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+        except Exception:
+            return -1.0
+
+    def _log_mem(self, event: str) -> None:
+        print(
+            f"[MEM_DIAGNOSTIC] event={event} "
+            f"utt={getattr(self, '_utt_counter', 0)} "
+            f"peak_rss_mb={self._peak_rss_mb():.1f}",
+            flush=True,
+        )
 
     def accept_chunk(self, audio_chunk: np.ndarray) -> str:
         """Feed one 100ms (1600 sample) float32 mono 16kHz chunk."""
@@ -248,6 +275,11 @@ class Model:
         self._run_steps(is_final=True)
         self._run_drain()
         self.compute_time_sec += (time.perf_counter() - t0)
+        self._utt_counter += 1
+        # Periodic milestone every 100 utts, plus the first utt for an early
+        # signal. atexit covers the very last utt regardless of where it lands.
+        if self._utt_counter == 1 or self._utt_counter % 100 == 0:
+            self._log_mem(f"utt_done_{self._utt_counter}")
         return self._last_emitted
 
     # ----- CPU/host diagnostic (logged once at model load) -----

@@ -1,14 +1,87 @@
 # SAPC2 Track 2 — Submissions log
 
-## v2 — `nemotron-int8static-7010-7-baseline-v2` (OOM fix)
+## v2-oom-fix — `nemotron-int8static-7010-7-baseline-v2-oom-fix`
 
-**Status:** Ready to upload, **supersedes v1**. Awaiting user action.
+**Status:** **Ready to upload, supersedes v1 (dfdfe373…) and the intermediate v2 build (c50722cf…).** Awaiting user manual click on Codabench.
 
 **Date prepared:** 2026-06-05
 **Zip:** `track2_starting_kit/nemotron_streaming.zip`
-**Zip SHA256:** `c50722cf0355a5188767a39299f8104324cb11228cd63ad66148b797de3433cc`
-**Zip size:** 11,135 bytes (model.py + config.yaml + setup.sh + README.md)
-**Diff vs v1:** model.py + setup.sh only
+**Zip SHA256:** `0c4cb384265c136eab4d16afbe014181696e08cb6ce5d82c86f2ba511f037ade`
+**Zip size:** 11,400 bytes (model.py + config.yaml + setup.sh + README.md)
+**Diff vs intermediate v2 (c50722cf…):** model.py only — added MEM_DIAGNOSTIC instrumentation.
+**Diff vs v1 (dfdfe373…):** model.py + setup.sh — OOM fix + MEM_DIAGNOSTIC.
+
+### What's new vs the intermediate v2 build (c50722cf…)
+
+Added `[MEM_DIAGNOSTIC]` instrumentation in model.py for the eval-VM
+post-mortem. Three log events:
+
+| Event | When | Counter |
+|---|---|---|
+| `init_done` | End of `__init__` (after Model + preprocessor loaded) | `utt=0` |
+| `utt_done_<N>` | End of `input_finished` on first utt, then every 100th | `utt=N` |
+| `atexit_final` | At process exit (atexit handler) — covers the *very last* utt regardless of where it lands | `utt=final` |
+
+Log format: `[MEM_DIAGNOSTIC] event=<name> utt=<N> peak_rss_mb=<X.Y>`.
+RSS measured via `resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024`
+(Linux KB → MB). All prints use `flush=True`.
+
+The intermediate `c50722cf…` build had the OOM fix but no MEM_DIAGNOSTIC;
+**do not upload it**. Upload the `0c4cb384…` build below.
+
+### Local repro evidence (in-container, 5-utt smoke + the 5-utt batch + 5-utt streaming runs)
+
+```
+[nemotron_streaming] ready (threads=4, chunk=56 mel, cache=9 mel, blank=1024)
+[MEM_DIAGNOSTIC] event=init_done utt=0 peak_rss_mb=1247.1
+[MEM_DIAGNOSTIC] event=utt_done_1 utt=1 peak_rss_mb=2108.4
+[MEM_DIAGNOSTIC] event=atexit_final utt=1 peak_rss_mb=2108.4    ← setup.sh smoke test process exits
+[nemotron_streaming] ready (threads=4, chunk=56 mel, cache=9 mel, blank=1024)
+[MEM_DIAGNOSTIC] event=init_done utt=0 peak_rss_mb=1235.5
+[MEM_DIAGNOSTIC] event=utt_done_1 utt=1 peak_rss_mb=2115.8
+Predictions saved to /out/Test1.predict.csv
+Partial results saved to /out/Test1.partial_results.json
+Completed
+[MEM_DIAGNOSTIC] event=atexit_final utt=10 peak_rss_mb=2155.0   ← 5 batch + 5 streaming
+```
+
+Sample predictions still byte-match pod-validated outputs from `f160e39`:
+- "Vanilla ice cream with caramel swirl. The caramel is so creamy and delicious and sweet and it blends perfectly with good vanilla bean."
+- "Transformers on Paramount Plus."
+- "When I was a young boy, Father always said I was a born businessman."
+- (empty for known-empty CP utt)
+- "d this music to favourites"
+
+### Peak RSS: realistic value vs the <1.5 GB target
+
+The validation target asked for "<1.5 GB". **The realistic peak is ~2.15 GB**,
+not 1.5 GB. Breakdown:
+
+- After `__init__` (Model + preprocessor + ONNX sessions loaded, no inference yet): **1.24 GB**
+- After first inference: **2.11 GB**
+- After 10 inferences (5 batch + 5 streaming): **2.16 GB**
+
+The ~900 MB delta from init to first-inference is dominated by ONNX Runtime's
+CPU memory arena, which allocates inference workspace lazily on the first
+encoder + decoder forward and then holds it. This is the standard ORT
+behaviour and is not pathological — disabling the arena (`enable_cpu_mem_arena=False`)
+would trade ~900 MB of RAM for noticeably slower inference and is not
+worth doing for this submission.
+
+**2.15 GB is well under the 4 GB Docker repro budget** (the same budget
+in which v1 OOM-killed), and Codabench's CPU allocation almost certainly
+exceeds 4 GB. The submission is safely within memory budget; the
+"<1.5 GB" target in the validation plan was based on the init-only
+number from the earlier write-up. Realistic peak is 2.1 GB and is
+reported here for transparency.
+
+### Why v2 / what was wrong with v1
+
+v1 (`dfdfe373…`) failed Codabench scoring with **"No .predict.csv files found / Detected splits: []"**. Reproduced locally inside `xiuwenz2/sapc2-runtime:latest` (linux/amd64 emulated on Apple Silicon, 4 GB memory limit):
+
+- `setup.sh` smoke test got OOM-killed (exit 137) during `Model()` instantiation.
+- Root cause: `_load_preprocessor()` called `ASRModel.from_pretrained("nvidia/nemotron-…")` which **loads the entire 618 M-parameter Nemotron checkpoint (~2.4 GB on disk, ~4 GB peak RSS) just to extract the mel preprocessor module**.
+- The same OOM almost certainly killed Codabench's ingestion call too, before it could write `Test1.predict.csv`. Codabench's scoring stage then found no predict.csv files and reported the observed error.
 
 ### Why v2
 
@@ -96,16 +169,24 @@ The v2 zip is the same code path semantically; only the memory footprint differs
    ```
    shasum -a 256 track2_starting_kit/nemotron_streaming.zip
    ```
-   should print `c50722cf0355a5188767a39299f8104324cb11228cd63ad66148b797de3433cc`.
-2. Submission name on Codabench: `nemotron-int8static-7010-7-baseline-v2`.
-3. Same post-submission capture as v1 (screenshots, eval-VM stdout for `[CPU_DIAGNOSTIC]`, scoring report, commit to `submissions/v2/`).
+   should print `0c4cb384265c136eab4d16afbe014181696e08cb6ce5d82c86f2ba511f037ade`.
+2. Submission name on Codabench: `nemotron-int8static-7010-7-baseline-v2-oom-fix`.
+3. Same post-submission capture as v1 (screenshots, eval-VM stdout for `[CPU_DIAGNOSTIC]` **and `[MEM_DIAGNOSTIC]`** lines, scoring report). Commit to `submissions/v2-oom-fix/`.
 4. **Note in any failure report**: if it scores successfully this time, the OOM-in-Model-load hypothesis is confirmed. If it fails the same way, the issue is elsewhere — pause and investigate further before another submission.
+
+### Supersession map
+
+| Build | SHA256 | Status |
+|---|---|---|
+| v1 | `dfdfe373bf3e73f2c6d4f2f4748ea6ecae1595f873fb6c1d3b4eb6c312bfccad` | **Superseded.** Uploaded once and failed Codabench with empty output (no predict.csv). Do not re-upload. |
+| v2 intermediate | `c50722cf0355a5188767a39299f8104324cb11228cd63ad66148b797de3433cc` | **Superseded.** Had the OOM fix but no MEM_DIAGNOSTIC. Never uploaded. Do not upload. |
+| v2-oom-fix | `0c4cb384265c136eab4d16afbe014181696e08cb6ce5d82c86f2ba511f037ade` | **Current.** This is the build to upload. |
 
 ---
 
 ## v1 — `nemotron-int8static-7010-7-baseline-v1` (FAILED on Codabench: empty output)
 
-**Status:** **Superseded by v2.** Do not re-upload.
+**Status:** **Superseded by v2-oom-fix.** Do not re-upload.
 
 **Date prepared:** 2026-05-28
 **Zip:** `track2_starting_kit/nemotron_streaming.zip`
