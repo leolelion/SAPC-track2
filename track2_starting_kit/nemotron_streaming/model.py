@@ -109,18 +109,48 @@ def _detokenize(tokens, vocab):
 
 # =====================================================================
 # Section 4: NeMo mel preprocessor — load once at __init__
+#
+# CRITICAL memory note: instantiate the preprocessor module DIRECTLY
+# from the Nemotron config, NOT by loading the full 618M-param ASR
+# model and reading `model.preprocessor`. The full model load peaks
+# at ~4 GB RSS and OOM-kills on tight CPU eval VMs. Direct
+# instantiation peaks at ~1.1 GB total.
+#
+# The constructor args mirror the Nemotron checkpoint's
+# `model_config.yaml` preprocessor block exactly (verified by reading
+# the .nemo tarball directly):
+#
+#   _target_: nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor
+#   sample_rate: 16000
+#   window_size: 0.025
+#   window_stride: 0.010
+#   window: hann
+#   features: 128
+#   n_fft: 512
+#   dither: 1.0e-05   ← we override to 0.0 for determinism
+#   pad_to: 0
+#   normalize: NA
+#   frame_splicing: 1
+#   log: true
+#   pad_value: 0.0
 # =====================================================================
 def _load_preprocessor():
-    """Build the deterministic Nemotron mel preprocessor."""
-    import nemo.collections.asr as _nemo_asr  # noqa: F401
-    from nemo.collections.asr.models import ASRModel
-
-    ref = ASRModel.from_pretrained(
-        "nvidia/nemotron-speech-streaming-en-0.6b", map_location="cpu"
+    """Build the deterministic Nemotron mel preprocessor (memory-light)."""
+    from nemo.collections.asr.modules import AudioToMelSpectrogramPreprocessor
+    pp = AudioToMelSpectrogramPreprocessor(
+        sample_rate=16000,
+        window_size=0.025,
+        window_stride=0.010,
+        window="hann",
+        features=128,
+        n_fft=512,
+        dither=0.0,        # override the checkpoint's 1e-5 for determinism
+        pad_to=0,
+        normalize="NA",    # NeMo's sentinel for "no normalization"
+        frame_splicing=1,
+        log=True,
+        pad_value=0.0,
     )
-    pp = ref.preprocessor
-    pp.featurizer.dither = 0.0
-    pp.featurizer.pad_to = 0
     pp.eval()
     return pp
 
