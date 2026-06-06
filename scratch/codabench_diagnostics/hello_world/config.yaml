@@ -1,0 +1,4 @@
+# Placeholder config for hello-world diagnostic. Intentionally empty
+# of meaningful settings — Model class does not read it.
+diagnostic: true
+purpose: codabench_contract_isolation
