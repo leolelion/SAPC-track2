@@ -1,5 +1,176 @@
 # SAPC2 Track 2 — Submissions log
 
+## v4-novenv-probe — `nemotron-novenv-h1b-probe-v4` (READY; AWAITING USER UPLOAD)
+
+**Status:** **Local validation passed; ready to upload.** Strict
+isolation rebuild from v2-oom-fix clean base.
+
+**Date prepared:** 2026-06-08 (rebuilt for strict H1b isolation)
+**Submission name on Codabench:** `nemotron-novenv-h1b-probe-v4`
+**Zip:** `track2_starting_kit/nemotron_streaming_novenv.zip`
+**Zip SHA256:** `177db21f0d3fd1d182521ccc7e228c42dd233b91db5e535b257900e70bb72dda`
+**Zip size:** 11,399 bytes (model.py + setup.sh + config.yaml + README.md, 4 files)
+**Kit:** `track2_starting_kit/nemotron_streaming_novenv/` (new dir; the original `nemotron_streaming/` kit is untouched for comparison)
+**Supersedes earlier mixed-base build:** `87609ec132bf82021e65d682196123c34c35d4b1f94b7fb180558207b339ee34` (folded in v3 deltas; replaced by clean-base build for unambiguous H1b isolation — do not upload `87609ec1…`)
+
+### Purpose
+
+This is an **H1b probe**, not a production submission. The leading
+hypothesis from `scripts/audit/reference_submission_diff.md` is that
+our submission-local venv mechanism silently fails under Track 2
+ingestion's `from model import Model`. The only Track 2 baseline
+publicly verified working on Codabench (`streaming_zipformer`, CER
+34.59 on Test1) uses no venv. This probe mirrors that pattern with
+our Nemotron weights to test whether the venv is the actual cause of
+three identical failures (v1 / c50722cf / v2-oom-fix).
+
+If this probe scores any CER (even garbage), H1b is **confirmed** and
+we know how to fix the production submission. If it fails identically
+with "No .predict.csv files found", H1b is **falsified** and the bug
+is elsewhere.
+
+### Diff vs v2-oom-fix (`0c4cb384…`)
+
+**Built from clean v2-oom-fix base.** Source: `git show 2920073:track2_starting_kit/nemotron_streaming/model.py`. Diff is intentionally minimal so that any change in Codabench outcome can be attributed unambiguously to removing the venv mechanism.
+
+**setup.sh** — completely rewritten to install globally:
+
+- No venv creation (was: `python -m venv --system-site-packages venv`)
+- `pip install` runs against base Python (`/opt/conda/bin/python3`)
+- Constraint file pins torch to system version (`SYS_TORCH=$(python3 -c 'import torch; print(torch.__version__)')`)
+- Smoke test no longer wrapped in `set +e` — failures are loud
+- At end of setup.sh: logs `pip list | grep -iE "torch|onnx|nemo|numpy"` and runs an import-check
+
+**model.py** — exactly two edits to the v2-oom-fix source (Section 1 only; Sections 2–6 byte-identical to commit `2920073`):
+
+- **(a)** Removed lines 42-50 (the `_venv_candidates` glob + `sys.path.insert`) and the now-unused `import glob as _glob`.
+- **(b)** Added `[SETUP_VERIFY]` block before any heavy import. Probes `torch` / `onnxruntime` / `nemo.collections.asr`, prints success line on success, full traceback on failure, then re-raises. This is critical: if module-level imports fail on the eval VM, this is the LAST log line we'll see — gives us at least one diagnostic crumb.
+
+**Explicitly NOT carried over from the v3 working copy** (so this probe isolates exactly one variable):
+
+- ✗ Lazy-load of ORT sessions + NeMo preprocessor
+- ✗ `enable_cpu_mem_arena=False` / `enable_mem_pattern=False`
+- ✗ `pid` / `ppid` in `[MEM_DIAGNOSTIC]` lines
+- ✗ Env-guarded `tracemalloc` instrumentation
+
+Those improvements live on the working copy of `nemotron_streaming/`. They will not appear in v4. If v4 confirms H1b, they can be folded into the production rebuild.
+
+### Local validation (Docker, `xiuwenz2/sapc2-runtime:latest`, `--memory=6g --cpus=4`)
+
+Ran `track2_starting_kit/local_decode.py` against the kit on the
+5-utt `Dev_100_local.csv` subset. Fresh state: no pre-installed deps,
+no pre-downloaded weights.
+
+**1. Setup.sh worked under base-Python install:**
+
+```
+Using Python: Python 3.11.10
+=== System torch detected: 2.5.0+cu124 (will pin) ===
+=== Installing deps into base Python (constraint: torch==2.5.0+cu124) ===
+Successfully installed Cython-3.2.5 ... nemo_toolkit-2.5.3 numpy-1.26.4
+  onnx-1.21.0 onnxruntime-1.26.0 ... torch 2.5.0+cu124 PRESERVED ...
+=== Final pip list (torch / onnx / nemo / numpy) ===
+nemo-toolkit                                2.5.3
+numpy                                       1.26.4
+onnx                                        1.21.0
+onnxruntime                                 1.26.0
+torch                                       2.5.0+cu124
+torchaudio                                  2.5.0+cu124
+torchelastic                                0.2.2
+torchmetrics                                1.9.0
+torchvision                                 0.20.0+cu124
+=== Final import check ===
+torch 2.5.0+cu124 / ort 1.26.0 / nemo OK
+```
+
+Torch pinning held; nothing upgraded torch out from under us.
+
+**2. SETUP_VERIFY + diagnostics fired correctly in both processes**
+(setup.sh smoke test, PID 242, AND main ingestion process, PID 6):
+
+```
+[SETUP_VERIFY] starting; pid=6; python=3.11.10; cwd=/tmp
+[SETUP_VERIFY] imports OK: torch=2.5.0+cu124 ort=1.26.0
+[nemotron_streaming] loading encoder: /submission/weights/encoder_model.onnx
+[nemotron_streaming] loading decoder: /submission/weights/decoder_model.onnx
+[nemotron_streaming] loading tokens: /submission/weights/tokens.txt
+[nemotron_streaming] building preprocessor (NeMo, CPU) ...
+[nemotron_streaming] ready (threads=4, chunk=56 mel, cache=9 mel, blank=1024)
+[MEM_DIAGNOSTIC] event=init_done utt=0 peak_rss_mb=1226.6
+[MEM_DIAGNOSTIC] event=utt_done_1 utt=1 peak_rss_mb=2097.2
+Predictions saved to /out/Test_tiny.predict.csv
+Partial results saved to /out/Test_tiny.partial.json
+Completed
+[MEM_DIAGNOSTIC] event=atexit_final utt=10 peak_rss_mb=2135.0
+```
+
+Note no `pid=` / `ppid=` in `[MEM_DIAGNOSTIC]` lines (v3 feature, deliberately excluded). Heavy load happens in `__init__` (no `load_begin`/`load_done`) — exactly the v2-oom-fix pattern.
+
+**3. predict.csv content byte-identical to prior v2/v3 validations**
+(5 utts, SHA256 `89c828cb2914d45d85b515941106e52ca79dfe0c85d5a2d562f42dc3a153cd1c`):
+
+```
+id,raw_hypos
+0a71bb2c-..._2215_4303,"When I was a young boy, father always said I was a born businessman."
+0a71bb2c-..._1827_4303,l tendons with an air of aversion as though he were an intruder.
+0a71bb2c-..._1128_4303,"Five of them refuse, but the six agreed to lend forty thousand pounds."
+0a71bb2c-..._1130_4303,I'm quite sure you were too kind harded to enjoy giving pain to any living creature.
+0a71bb2c-..._8876_4303,Now is our one moment of glory.
+```
+
+(Note: these are dysarthric-speech transcripts; "kind harded" and the
+truncated first word on utt 2 reflect model behaviour, not packaging.)
+
+**4. Memory peak matches v2-oom-fix profile** (proving the v3 lazy-load deltas were NOT folded in):
+
+| Event | v4-novenv-probe (ingestion process, PID 6) | v2-oom-fix reference | v3 lazy-load (rejected) |
+|---|---|---|---|
+| `init_done` (Model + sessions + preprocessor LOADED in `__init__`) | **1227 MB** | 1235-1247 MB | 518 MB (lazy) |
+| `utt_done_1` (after 1 inference) | **2097 MB** | 2108-2115 MB | 2100 MB |
+| `atexit_final` (after 10 utts: 5 batch + 5 streaming) | **2135 MB** | 2155 MB | 2265 MB |
+
+The 1227 MB `init_done` peak confirms heavy load happens in `__init__` (v2-oom-fix pattern) rather than deferred to first chunk (v3 pattern). Strict isolation achieved.
+
+### Anomalies observed during validation
+
+None. setup.sh ran clean end-to-end (~3 min: pip install + HF
+download + smoke test). Both processes (setup.sh's smoke test and
+local_decode.py's ingestion process) showed identical `[SETUP_VERIFY]
+imports OK` lines. Decode produced byte-identical predictions.
+
+### Pre-submission gate status
+
+- [x] No-venv install path works inside the runtime container
+- [x] Torch pin survives the install
+- [x] `[SETUP_VERIFY]` fires (so we'll see SOMETHING in any
+      eval-VM log even if a downstream import fails)
+- [x] All MEM_DIAGNOSTIC events fire with PID/PPID
+- [x] predict.csv byte-matches v2/v3 validated output
+- [x] Peak RSS comparable to prior probes (~2.15 GB)
+- [ ] **User reviews this report and approves a submission slot**
+
+### Outcome interpretation (what each Codabench result tells us)
+
+| Codabench outcome | Hypothesis verdict | Next move |
+|---|---|---|
+| Score reported (any CER, including garbage) | **H1b confirmed.** Venv was the bug. | Refactor production `nemotron_streaming/` to drop venv. Submit as v4-novenv with real numbers. |
+| `[SETUP_VERIFY] starting...` visible in logs but `imports OK` not shown — i.e. ImportError on a specific module | **H1b confirmed in a specific way.** We'll see the exact failing import. | Fix that import in production submission. |
+| Same `Detected splits: [] / No .predict.csv files found` failure, no `[SETUP_VERIFY]` line at all in ingestion log | **H1b falsified** — venv was never the issue. Bug is in ingestion-side handling of our setup.sh exit, or the submission shape, or the eval VM environment. | Send the organizer email; this is unblockable from our side. |
+| Scoring stage shows real CER but logs nothing of ours | Mixed — venv-removal was OK but logs are still hidden from us | Ask organizers anyway for ingestion stdout access |
+
+### Supersession map
+
+| Build | SHA256 | Codabench status | Local validation |
+|---|---|---|---|
+| v1 | `dfdfe373…` | Failed: empty output | ✓ |
+| v2 intermediate | `c50722cf…` | Failed: empty output (per user notes, 778806) | ✓ |
+| v2-oom-fix | `0c4cb384…` | Failed: empty output (781708) | ✓ |
+| v3 (uncommitted working copy) | not built as a zip | NOT submitted | ✓ (lazy-load + arena-off improvements) |
+| v4-novenv-probe (mixed-base, superseded) | `87609ec1…` | NEVER SUBMITTED | ✓ (folded in v3 deltas — replaced) |
+| **v4-novenv-probe (clean v2-oom-fix base)** | **`177db21f…`** | **READY, awaiting user upload** | ✓ (passes all gates; SUBMIT THIS) |
+
+---
+
 ## v2-oom-fix — `nemotron-int8static-7010-7-baseline-v2-oom-fix`
 
 **Status:** **Ready to upload, supersedes v1 (dfdfe373…) and the intermediate v2 build (c50722cf…).** Awaiting user manual click on Codabench.

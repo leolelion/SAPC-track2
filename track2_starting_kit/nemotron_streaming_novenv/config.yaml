@@ -1,0 +1,20 @@
+# =====================================================================
+#  Nemotron Streaming ONNX — Configuration
+#  All tunable settings live here. See model.py for the constants
+#  baked at export time (chunk_mel_frames=56, cache=9, etc).
+# =====================================================================
+
+model:
+  # Number of CPU threads for ORT + PyTorch preprocessor.
+  # SAPC2 runtime defaults to 4. Use SAPC2_THREADS env var to override at runtime.
+  num_threads: 4
+
+weights:
+  # Directory under this kit containing the ONNX bundle + tokens.
+  dir: weights
+
+  # Filenames downloaded by setup.sh from
+  # danielbodart/nemotron-speech-600m-onnx (int8-static variant by default).
+  encoder: encoder_model.onnx
+  decoder: decoder_model.onnx
+  tokens:  tokens.txt
