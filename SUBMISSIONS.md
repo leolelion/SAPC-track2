@@ -1,5 +1,165 @@
 # SAPC2 Track 2 — Submissions log
 
+## v6-nemo-free — nemo-free production candidate (SHIPPED 2026-06-08)
+
+**Status:** **SHIPPED to Codabench.** Awaiting scoring result. This
+supersedes v1 / v2 / v2-oom-fix (all failed) and v4 / v5 (built but
+either superseded or never shipped). The v3 lazy-load working copy
+remains uncommitted and unused.
+
+**Date shipped:** 2026-06-08
+**Codabench submission name:** see Codabench history (user-chosen on upload form)
+**Zip:** [track2_starting_kit/nemotron_streaming_nemo_free.zip](track2_starting_kit/nemotron_streaming_nemo_free.zip)
+**Zip SHA256:** `afd93afef6f51c6585fa038c680c488713a8ca4cd9ca931c1e4b318da15dee5f`
+**Zip size:** 13,841 bytes (4 files: model.py + setup.sh + config.yaml + README.md)
+**Kit:** `track2_starting_kit/nemotron_streaming_nemo_free/`
+
+### What it is
+
+A nemo-free rebuild of the Nemotron streaming submission. NeMo's
+`AudioToMelSpectrogramPreprocessor` is replaced with a hand-rolled
+torch + numpy implementation (`MinimalMelPreprocessor`, inlined in
+`model.py`). Without NeMo, `lightning` / `pytorch_lightning` /
+`numba` / `librosa` are no longer pulled in transitively, which
+removes the numpy ABI conflict that caused v1 / v2 / v2-oom-fix to
+fail on Codabench.
+
+### Why no NeMo (the root cause)
+
+Codabench ingestion logs for v2-oom-fix (781708) showed:
+
+```
+ValueError: numpy.dtype size changed, may indicate binary
+incompatibility. Expected 96 from C header, got 88 from PyObject
+```
+
+This is a numpy ABI conflict. The `lightning` wheel (pulled in
+transitively via `nemo_toolkit[asr]`) was compiled against numpy 2.x
+(dtype size 96), but pip resolved numpy to 1.26.4 (dtype size 88)
+because `numba 0.65.1` (pulled in via `librosa` via `nemo`) has a
+strict `numpy<2` constraint. The mismatch crashes the C-level import
+inside ingestion's process.
+
+The v5 attempt (relaxing our explicit `numpy<2` pin in setup.sh) did
+NOT fix this — the transitive `numba` constraint still forced the
+downgrade. The only fix that closes the ABI mismatch entirely is to
+drop NeMo, which removes `lightning` + `numba` + `librosa` from the
+dependency tree at the same time.
+
+### Diff vs v5 / `nemotron_streaming_novenv/`
+
+| File | v5 | v6-nemo-free |
+|---|---|---|
+| `model.py` SETUP_VERIFY imports | `torch, onnxruntime, nemo.collections.asr` | `torch, onnxruntime` (no nemo) |
+| `model.py` Section 4 (preprocessor) | `_load_preprocessor()` calls `nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor(...)` | Inline `MinimalMelPreprocessor` class (hand-rolled fp64 slaney filterbank + STFT + log) |
+| `setup.sh` deps | `omegaconf, huggingface_hub, sentencepiece, onnxruntime, onnx, nemo_toolkit[asr]>=2.5.0,<2.6` (+ ~150 transitive deps incl. lightning, numba, librosa) | `omegaconf, huggingface_hub, onnxruntime, onnx` (~20 packages total; no nemo / lightning / numba / librosa) |
+| `setup.sh` numpy constraint | `numpy>=1.26,<3` (still got downgraded to 1.26.4 via numba) | None — system numpy 2.1.2 preserved |
+| `setup.sh` end-of-script | logs `pip list | grep torch/onnx/nemo/numpy` and runs `import torch, onnxruntime, nemo.collections.asr` | logs `pip list` filtered to ML-relevant packages; runs import check AND **explicitly verifies** `nemo / lightning / pytorch_lightning / numba / librosa` are NOT installed |
+
+### Byte-equivalence vs NeMo (audit gate)
+
+Hard precondition for shipping: the new preprocessor must produce
+byte-equivalent output to NeMo's. Test in
+[scripts/audit/preproc_byte_equivalence/](scripts/audit/preproc_byte_equivalence/).
+Threshold: max abs diff < 1e-4. Result on 3 Dev_streaming utterances:
+
+| File | shape | **max abs diff** | mean abs diff | verdict |
+|---|---|---|---|---|
+| `..._1052_4303.wav` (3.49 s, 350 frames) | ✓ (1, 128, 350) | **1.9e-6** | 1.8e-8 | PASS |
+| `..._1053_4303.wav` (4.73 s, 474 frames) | ✓ (1, 128, 474) | **1.9e-6** | 1.8e-8 | PASS |
+| `..._1054_4303.wav` (3.57 s, 358 frames) | ✓ (1, 128, 358) | **1.9e-6** | 1.3e-8 | PASS |
+
+The 1.9e-6 residual is fp32 rounding noise. **52× under threshold.**
+
+Key implementation detail: torchaudio's `melscale_fbanks(mel_scale='slaney', norm='slaney')` (the obvious first attempt) was 1.4-1.7× over threshold because torchaudio computes the filterbank entirely in fp32 and the mel-to-hz inversion loses precision at high mels. Switching to a hand-rolled fp64 numpy filterbank (matching librosa's exact formulas) closed the gap to 1.9e-6.
+
+### Local validation evidence (fresh `xiuwenz2/sapc2-runtime:latest` container, no cached deps)
+
+```
+===== numpy BEFORE =====
+numpy: 2.1.2
+
+===== setup.sh =====
+Using Python: Python 3.11.10
+=== System torch detected: 2.5.0+cu124 (will pin) ===
+Successfully installed (20 packages):
+  annotated-doc antlr4-python3-runtime anyio click flatbuffers
+  h11 hf-xet httpcore httpx huggingface_hub markdown-it-py mdurl
+  ml_dtypes omegaconf onnx onnxruntime protobuf rich shellingham typer
+=== Final import check ===
+torch 2.5.0+cu124 / torchaudio 2.5.0+cu124 / ort 1.26.0 / numpy 2.1.2
+  ok: nemo not installed
+  ok: lightning not installed
+  ok: pytorch_lightning not installed
+  ok: numba not installed
+  ok: librosa not installed
+[SETUP_VERIFY] starting; pid=59; python=3.11.10; cwd=/tmp
+[SETUP_VERIFY] imports OK: torch=2.5.0+cu124 ort=1.26.0
+[nemotron_streaming] building preprocessor (torch+numpy, CPU) ...
+[nemotron_streaming] ready (threads=4, chunk=56 mel, cache=9 mel, blank=1024)
+Smoke test passed. Output on silence: ''
+
+===== numpy AFTER =====
+numpy: 2.1.2  ← PRESERVED
+
+===== ingestion-cwd separate-process import simulation =====
+cwd=/app/program
+[SETUP_VERIFY] starting; pid=98; python=3.11.10; cwd=/app/program
+[SETUP_VERIFY] imports OK: torch=2.5.0+cu124 ort=1.26.0
+[nemotron_streaming] building preprocessor (torch+numpy, CPU) ...
+INGESTION_SIM: Model loaded successfully
+
+===== 5-utt decode via local_decode.py =====
+Predictions saved to /out/Test_tiny.predict.csv
+Partial results saved to /out/Test_tiny.partial.json
+Completed
+```
+
+### 5-utt predict.csv vs prior baseline
+
+```
+SHA256 (v6 nemo-free):  89c828cb2914d45d85b515941106e52ca79dfe0c85d5a2d562f42dc3a153cd1c
+SHA256 (v2-oom-fix):    89c828cb2914d45d85b515941106e52ca79dfe0c85d5a2d562f42dc3a153cd1c
+```
+
+**Byte-identical match.** The 1.9e-6 mel diff produces zero character-level differences in the final decode on these 5 utterances.
+
+### Setup.sh wall time
+
+Cold pip install: **~30 s** (vs ~3 min for the NeMo variant). The Codabench install stage should be dramatically faster.
+
+### Pre-submission gate status
+
+- [x] Mel preprocessor byte-equivalence vs NeMo: max abs diff 1.9e-6 (threshold 1e-4) on 3 files
+- [x] Fresh container setup.sh: completes with numpy 2.1.2 preserved
+- [x] Final pip list: no nemo / lightning / pytorch_lightning / numba / librosa
+- [x] SETUP_VERIFY imports OK fires in both setup.sh smoke-test process AND ingestion-cwd separate process
+- [x] Separate-process import from `/app/program` (mimicking Codabench's ingestion cwd): no ABI error, Model loads
+- [x] 5-utt predict.csv byte-matches v2-oom-fix baseline (SHA `89c828cb…`)
+- [x] **User shipped to Codabench** ← done
+
+### Outcome interpretation
+
+| Codabench outcome | Verdict |
+|---|---|
+| Any CER scored | NeMo-removal fix confirmed. The v2-oom-fix `nemo→lightning→numpy ABI` hypothesis was the actual cause. |
+| Same `Detected splits: []` failure | The numpy ABI hypothesis was wrong (despite matching the traceback). Some other Codabench-side issue we still don't see. |
+| `[SETUP_VERIFY]` visible but Model never loads | Whatever fails would be a NEW failure mode beyond the nemo / numpy story. Use the visible traceback to diagnose. |
+
+### Supersession map
+
+| Build | SHA256 | Status |
+|---|---|---|
+| v1 | `dfdfe373…` | Failed: `Detected splits: []` |
+| v2 intermediate | `c50722cf…` | Failed: `Detected splits: []` |
+| v2-oom-fix | `0c4cb384…` | Failed: `Detected splits: []` — traceback revealed numpy ABI mismatch in ingestion logs |
+| v3 (uncommitted) | n/a (never built as zip) | Not submitted; lazy-load improvements kept on working copy briefly, then discarded |
+| v4-novenv-probe | `177db21f…` | Built + validated locally, **never submitted** (superseded by v6 once root cause was understood) |
+| v5 numpy probe | n/a (never built as zip) | Local validation showed numpy still downgrades via transitive numba constraint; concept superseded by v6 |
+| **v6-nemo-free** | **`afd93afe…`** | **SHIPPED 2026-06-08; awaiting Codabench result** |
+
+---
+
 ## v4-novenv-probe — `nemotron-novenv-h1b-probe-v4` (READY; AWAITING USER UPLOAD)
 
 **Status:** **Local validation passed; ready to upload.** Strict
