@@ -1,5 +1,142 @@
 # SAPC2 Track 2 — Submissions log
 
+## v7-minimal — copy-the-baseline play (READY; awaiting user upload)
+
+**Status:** **Local validation passed; ready to upload.** Submission
+name: `nemotron-int8static-v7-minimal`.
+
+**Date prepared:** 2026-06-09
+**Zip:** [track2_starting_kit/nemotron_streaming_v7_minimal.zip](track2_starting_kit/nemotron_streaming_v7_minimal.zip)
+**Zip SHA256:** `868b37328b31519fab83229168807eb87acc904bb99805da539e98adb7714e37`
+**Zip size:** 11,328 bytes
+**Kit:** `track2_starting_kit/nemotron_streaming_v7_minimal/`
+
+### Purpose
+
+After v4 and v6 both failed identically with no captured ingestion
+output (v6's "no captured output" being the strong signal — v4 only
+showed logs because its setup.sh smoke test crashed loud with the
+numpy ABI traceback), this is the "stop being clever, copy what
+works" play. We strip our submission down to the minimum that
+mirrors the upstream `streaming_zipformer/` baseline shape (the one
+publicly confirmed working at CER 34.59 on Test1).
+
+### What's stripped vs v6 (`afd93afe`)
+
+- `[SETUP_VERIFY]` block at top of model.py
+- `SAPC2_THREADS` / `OMP_NUM_THREADS` / `MKL_NUM_THREADS` env juggling
+- `torch.set_num_threads` / `set_num_interop_threads` calls
+- `setup.sh` smoke test — removed entirely
+- Final `pip list` + import-check block at end of `setup.sh`
+- `atexit` hook in Model
+- Periodic `MEM_DIAGNOSTIC` every 100 utts
+
+### What's kept from v6
+
+- 5-method `Model` class
+- MinimalMelPreprocessor (pure torch + numpy mel)
+- Greedy RNN-T decode + encoder/decoder state cache + drain
+- One-shot `[CPU_DIAGNOSTIC]` print at construction
+- One-shot `[MEM_DIAGNOSTIC] event=init_done` after `__init__`
+
+### What's added (one line)
+
+At the end of `input_finished()`:
+
+```
+[END_OF_RUN] utts_processed=<N> final_state=ok
+```
+
+Converts "did the model finish each utterance?" from silent to a
+single-line-visible signal IF anything lands in a captured log.
+
+### setup.sh shape
+
+Three stages, matching `streaming_zipformer/setup.sh`:
+
+```
+=== Stage 1: Detect environment ===
+=== Stage 2: Install packages ===
+=== Stage 3: Download model weights ===
+=== setup.sh complete ===
+```
+
+`set -e` (not `set -euo pipefail`). Installs only `omegaconf`,
+`huggingface_hub`, `onnxruntime`, `onnx`. Pins torch to the runtime
+image's pre-installed version. No smoke test. No final verification.
+
+### Lazy ORT session loading
+
+`__init__` stays cheap — sessions and preprocessor open on first
+`accept_chunk` / `input_finished` via `_ensure_loaded()`. Idempotent.
+
+### Local validation (`xiuwenz2/sapc2-runtime:latest`, fresh container, no cached deps)
+
+```
+===== numpy BEFORE =====
+numpy: 2.1.2
+===== setup.sh =====
+=== Stage 1: Detect environment ===
+=== Stage 2: Install packages ===
+=== Stage 3: Download model weights ===
+=== setup.sh complete ===
+===== numpy AFTER + dep absence checks =====
+numpy: 2.1.2
+  ok: nemo not installed
+  ok: lightning not installed
+  ok: pytorch_lightning not installed
+  ok: numba not installed
+  ok: librosa not installed
+===== ingestion sim =====
+[nemotron_streaming] constructed (threads=4, chunk=56 mel, cache=9 mel, blank=1024, weights deferred)
+[MEM_DIAGNOSTIC] event=init_done peak_rss_mb=538.8
+INGESTION_SIM: Model loaded successfully
+===== 5-utt decode =====
+[nemotron_streaming] constructed (threads=4, ...)
+[MEM_DIAGNOSTIC] event=init_done peak_rss_mb=529.6
+[nemotron_streaming] loading encoder: /submission/weights/encoder_model.onnx
+[nemotron_streaming] loading decoder: /submission/weights/decoder_model.onnx
+[nemotron_streaming] loading tokens: /submission/weights/tokens.txt
+[nemotron_streaming] building preprocessor (torch+numpy, CPU) ...
+[nemotron_streaming] ready
+[END_OF_RUN] utts_processed=1 final_state=ok
+... (5 utts)
+Predictions saved to /out/Test_tiny.predict.csv
+[END_OF_RUN] utts_processed=6 final_state=ok
+... (5 more utts, streaming pass)
+Partial results saved to /out/Test_tiny.partial.json
+Completed
+```
+
+predict.csv SHA = `89c828cb2914d45d85b515941106e52ca79dfe0c85d5a2d562f42dc3a153cd1c`
+— **byte-identical to v6 / v2-oom-fix baseline.**
+
+### Pre-submission gate status
+
+- [x] setup.sh runs clean in fresh container (3 stages, ~30 s cold)
+- [x] numpy 2.1.2 preserved
+- [x] No nemo / lightning / pytorch_lightning / numba / librosa installed
+- [x] Ingestion-cwd separate-process import works
+- [x] 5-utt predict.csv byte-matches baseline
+- [x] `[CPU_DIAGNOSTIC]`, `[MEM_DIAGNOSTIC]`, `[END_OF_RUN]` all fire
+
+### Outcome interpretation
+
+| Codabench result | What it tells us |
+|---|---|
+| Scores any CER | The surface area we'd added (SETUP_VERIFY / thread env / smoke test / atexit) was tripping Codabench's contract. Production = this shape. |
+| Same `Detected splits: []` with NO captured output | Failure is not in our submission code; need organizer ingestion log. **Hard rule: no more probe submissions after this.** Email organizer; use time to scope finetune. |
+| `[END_OF_RUN]` visible somewhere but predict.csv missing | We finished all utts but ingestion didn't write predict.csv — Codabench output-path issue (organizer side). |
+
+### Hard rule going forward
+
+If v7 fails identically: **stop submitting.** Wait for organizer
+reply with usable ingestion-side info. Don't burn slots blindly —
+the slot-cost of guessing without information is now established
+as high (6/50 used, 0 scored).
+
+---
+
 ## v6-nemo-free — nemo-free production candidate (SHIPPED 2026-06-08)
 
 **Status:** **SHIPPED to Codabench.** Awaiting scoring result. This
