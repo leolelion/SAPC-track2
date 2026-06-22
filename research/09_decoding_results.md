@@ -24,6 +24,18 @@ are fragile and a wider search recovers a lot. Did not fully saturate at 8.
 **Beam-4 latency ≈ greedy** (TTFT slightly lower; kept real-time, no lag). TTFT is chunk-accumulation-bound
 (~640 ms), not search-width-bound, and beam-4's per-chunk decode stays under the 100 ms budget with 4 threads.
 
+## Statistical rigor (per-etiology + bootstrap 95% CI, direct char-CER metric)
+| config | overall | ALS | CP | DS | PD | Stroke |
+|---|---|---|---|---|---|---|
+| greedy | 23.81% | 20.2 | 29.6 | 26.1 | 15.7 | 27.5 |
+| beam-4 | 20.90% | 17.2 | 26.2 | 23.9 | 14.0 | 23.2 |
+| beam-8 | 20.23% | 16.7 | 25.7 | 22.8 | 13.3 | 22.6 |
+
+(Direct char-CER runs ~2 pts above sclite; relative pattern is the point.) Paired bootstrap (B=2000):
+beam-4 Δ=+2.91 CI[2.42,3.40] **SIG**; beam-8 Δ=+3.58 CI[3.03,4.16] **SIG**. Beam helps **most on the
+hardest etiologies** (CP −3.9, Stroke −4.9, DS −3.3 abs) — consistent with "wider search recovers more when
+the acoustic model is uncertain." Persisted: `e1_results/stats_analysis.txt`.
+
 ## Verdict
 **Beam-4 is a strict win: −2.6 CER pts at identical latency, same size, zero retraining → ship it.**
 Upgrades the live #1 submission (greedy → modified_beam_search paths=4 in model.py / config.yaml).
