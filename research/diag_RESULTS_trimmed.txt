@@ -1,0 +1,144 @@
+
+############### 1. BUILD STRATIFIED MANIFEST ###############
+wrote 425 utts to /workspace/SAPC2/manifest/Dev_diag.csv
+worst-speaker utts: {'55c1784a': 25, '4a9f71ab': 25, '7c58626d': 25, '8926bff8': 25, '54618732': 25, '4902e925': 25, 'e42558d6': 25}
+by duration bin: {'8-15s': 84, '0-3s': 101, '3-8s': 130, '15-30s': 60, '30-infs': 50}
+by etiology: {'ALS': 110, 'Cerebral Palsy': 152, 'Down Syndrome': 67, "Parkinson's Disease": 77, 'Stroke': 19}
+dur: min=1.6 median=6.8 max=120.1
+DATA_ROOT=/workspace/SAPC2
+
+############### 2. DECODE NEMOTRON (int8) on diag set ###############
+Looking in links: /workspace/finetune/nemo_submission/wheels
+Processing ./wheels/onnxruntime-1.27.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+Processing ./wheels/flatbuffers-25.12.19-py2.py3-none-any.whl (from onnxruntime)
+Requirement already satisfied: numpy>=1.21.6 in /usr/local/lib/python3.11/dist-packages (from onnxruntime) (1.26.3)
+Requirement already satisfied: packaging in /usr/local/lib/python3.11/dist-packages (from onnxruntime) (24.1)
+Processing ./wheels/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl (from onnxruntime)
+Installing collected packages: flatbuffers, protobuf, onnxruntime
+Successfully installed flatbuffers-25.12.19 onnxruntime-1.27.0 protobuf-7.35.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+deps ready: ort 1.27.0
+Ingestion program - Streaming ASR (Local Dev)
+Running setup.sh...
+[nemotron_streaming] loading encoder: /workspace/finetune/nemo_submission/weights/encoder_model.onnx
+[nemotron_streaming] loading decoder: /workspace/finetune/nemo_submission/weights/decoder_model.onnx
+[nemotron_streaming] loading tokens: /workspace/finetune/nemo_submission/weights/tokens.txt
+[nemotron_streaming] building preprocessor (NeMo, CPU) ...
+[nemotron_streaming] ready (threads=8, chunk=56 mel, cache=9 mel, blank=1024)
+Found 425 audio files in manifest /workspace/SAPC2/manifest/Dev_diag.csv
+[Batch] Progress: 100/425
+[Batch] Progress: 200/425
+[Batch] Progress: 300/425
+[Batch] Progress: 400/425
+Predictions saved to /dev/shm/diag_nemo.csv
+Found 10 audio files in manifest /workspace/SAPC2/manifest/Dev_10.csv
+Partial results saved to /dev/shm/_n.json
+Completed
+NEMO_DECODE_OK
+
+############### 3. SETUP + DECODE ZIPFORMER A1 (exp A) ###############
+zf submission dir:
+total 3919
+drwxrwxrwx  3 root root 1000668 Jun 24 21:23 .
+drwxrwxrwx 13 root root 3001938 Jun 24 21:13 ..
+lrwxrwxrwx  1 root root      45 Jun 24 21:23 decoder.onnx -> /workspace/finetune/onnx/a1/decoder.int8.onnx
+lrwxrwxrwx  1 root root      45 Jun 24 21:23 encoder.onnx -> /workspace/finetune/onnx/a1/encoder.int8.onnx
+lrwxrwxrwx  1 root root      44 Jun 24 21:23 joiner.onnx -> /workspace/finetune/onnx/a1/joiner.int8.onnx
+-rw-rw-rw-  1 root root    1666 Jun 24 21:13 model.py
+-rw-rw-rw-  1 root root    5048 Jun 24 21:13 tokens.txt
+drwxrwxrwx  2 root root       1 Jun 24 21:23 wheels
+Ingestion program - Streaming ASR (Local Dev)
+Traceback (most recent call last):
+  File "/workspace/sapc-nemotron/track2_starting_kit/local_decode.py", line 204, in <module>
+    main()
+  File "/workspace/sapc-nemotron/track2_starting_kit/local_decode.py", line 177, in main
+    from model import Model
+  File "/workspace/finetune/zf_a1_sub/model.py", line 5, in <module>
+    import sherpa_onnx
+ModuleNotFoundError: No module named 'sherpa_onnx'
+ZF_DECODE_FAIL
+
+############### 4. CROSS-TAB (length x severity + head-to-head rescue) ###############
+
+########## MODEL: nemo ##########
+  ALL            n= 425  meanCER= 47.5%  empty=107 (25%)
+  -- by duration --
+  0-3s           n= 101  meanCER= 46.6%  empty= 22 (22%)
+  3-8s           n= 130  meanCER= 59.9%  empty= 54 (42%)
+  8-15s          n=  84  meanCER= 51.1%  empty= 23 (27%)
+  15-30s         n=  60  meanCER= 42.8%  empty=  8 (13%)
+  >30s           n=  50  meanCER= 17.0%  empty=  0 (0%)
+  -- by etiology --
+  ALS            n= 110  meanCER= 62.7%  empty= 43 (39%)
+  Cerebral Palsy n= 152  meanCER= 54.3%  empty= 48 (32%)
+  Down Syndrome  n=  67  meanCER= 52.8%  empty= 12 (18%)
+  Parkinson's Disease n=  77  meanCER= 10.9%  empty=  0 (0%)
+  Stroke         n=  19  meanCER= 35.0%  empty=  4 (21%)
+PROBE_IDS=fb9c683c-41a5-486c-ae6a-08dc945c48db_148_6752 031e84ad-54f2-434b-abb3-08dc5d6a38e4_26210_5577 e42558d6-5a42-437d-e7c4-08dcd9e31338_33460_12269 08626c89-3dbd-4756-488d-08db66e486e4_510_1096
+
+############### 5. (B) BLANK-PROBABILITY PROBE on empties (+ control) ###############
+[nemotron_streaming] loading encoder: /workspace/finetune/nemo_submission/weights/encoder_model.onnx
+[nemotron_streaming] loading decoder: /workspace/finetune/nemo_submission/weights/decoder_model.onnx
+[nemotron_streaming] loading tokens: /workspace/finetune/nemo_submission/weights/tokens.txt
+[nemotron_streaming] building preprocessor (NeMo, CPU) ...
+[nemotron_streaming] ready (threads=4, chunk=56 mel, cache=9 mel, blank=1024)
+
+ID fb9c683c-41a dur=1.67s eti=Cerebral Palsy | final=''
+  decode_steps=28  argmax==blank: 28/28 (100%)  finite_logits=True
+  (blank - best_nonblank) margin: mean=+3.81 min=+1.75 max=+6.69  (>0 => blank wins)
+  ref: 'cortana'
+
+ID 031e84ad-54f dur=27.04s eti=ALS | final=''
+  decode_steps=346  argmax==blank: 346/346 (100%)  finite_logits=True
+  (blank - best_nonblank) margin: mean=+3.69 min=+0.40 max=+9.26  (>0 => blank wins)
+  ref: 'considerable interest was displayed in the probable behavior'
+
+ID e42558d6-5a4 dur=5.7586875s eti=ALS | final=''
+  decode_steps=79  argmax==blank: 79/79 (100%)  finite_logits=True
+  (blank - best_nonblank) margin: mean=+3.93 min=+0.87 max=+8.14  (>0 => blank wins)
+  ref: 'quick'
+
+ID 08626c89-3db dur=8.4041875s eti=Parkinson's Disease | final='Is the observatory at the Willis Tower w'
+  decode_steps=136  argmax==blank: 113/136 (83%)  finite_logits=True
+  (blank - best_nonblank) margin: mean=+6.02 min=-11.79 max=+17.09  (>0 => blank wins)
+  ref: 'is the observatory at the willis tower wheelchair accessible'
+
+############### 5b. BEAM/BLANK-PENALTY RECOVERY on empties ###############
+[nemotron_streaming] loading encoder: /workspace/finetune/nemo_submission/weights/encoder_model.onnx
+[nemotron_streaming] loading decoder: /workspace/finetune/nemo_submission/weights/decoder_model.onnx
+[nemotron_streaming] loading tokens: /workspace/finetune/nemo_submission/weights/tokens.txt
+[nemotron_streaming] building preprocessor (NeMo, CPU) ...
+[nemotron_streaming] ready (threads=4, chunk=56 mel, cache=9 mel, blank=1024)
+
+ID fb9c683c-41a dur=1.67s eti=Cerebral Palsy  ref='cortana'
+  blank_penalty= 0.0: CER=100.0%  hyp=''
+  blank_penalty= 3.0: CER=100.0%  hyp='Could color'
+  blank_penalty= 6.0: CER=100.0%  hyp='rttulanza. Could color, the color color'
+  blank_penalty=10.0: CER=100.0%  hyp="rttulanza. Cool. Cool. Cool. Couldn't could. Could it? "
+
+ID 031e84ad-54f dur=27.04s eti=ALS  ref='considerable interest was displayed in the probable beh'
+  blank_penalty= 0.0: CER=100.0%  hyp=''
+  blank_penalty= 3.0: CER=100.0%  hyp="Yeah, I'm there every bre every one delivery and a rare"
+  blank_penalty= 6.0: CER=100.0%  hyp='rttulanza. Yeah, yeah. Yeah. Yeah. Yeah. Yeah. Yeah. Ye'
+  blank_penalty=10.0: CER=100.0%  hyp='rttulanza. Yeah, yeah. Yeah. Yeah. Yeah. Yeah. Yeah. Ye'
+
+ID e42558d6-5a4 dur=5.7586875s eti=ALS  ref='quick'
+  blank_penalty= 0.0: CER=100.0%  hyp=''
+  blank_penalty= 3.0: CER=100.0%  hyp='Queen Way Gwen Greg Greg Greg Grank Greg Greg.'
+  blank_penalty= 6.0: CER=100.0%  hyp="rttulanza. Like, like, like, like, it's like, yeah, it'"
+  blank_penalty=10.0: CER=100.0%  hyp='rttulanza. Oh, yeah. Oh, yeah. Hmm. Um. Oh, yeah. Um. U'
+
+ID 08626c89-3db dur=8.4041875s eti=Parkinson's Disease  ref='is the observatory at the willis tower wheelchair acces'
+  blank_penalty= 0.0: CER=  1.7%  hyp='Is the observatory at the Willis Tower wheelchair acces'
+  blank_penalty= 3.0: CER=  1.7%  hyp='is the observatory at the Willis Tower wheelchair acces'
+  blank_penalty= 6.0: CER=100.0%  hyp='rttulanza. Is it? Is it? Is it? Is the observatory at t'
+  blank_penalty=10.0: CER=100.0%  hyp='rttulanza. Uh, is it? Uh, is it? Uh, is it? Uh, is it? '
+
+############### 6. (C) fp32 vs int8 availability ###############
+-rw-rw-rw- 1 root root      7720 Jun 21 13:26 /workspace/finetune/nemo_submission/weights/decoder_model.onnx
+-rw-rw-rw- 1 root root  35772420 Jun 21 13:27 /workspace/finetune/nemo_submission/weights/decoder_model.onnx.data
+-rw-rw-rw- 1 root root  44533336 Jun 21 13:26 /workspace/finetune/nemo_submission/weights/encoder_model.onnx
+-rw-rw-rw- 1 root root 837750784 Jun 21 13:26 /workspace/finetune/nemo_submission/weights/encoder_model.onnx.data
+(C requires an fp32 encoder; if only int8 present, fetch danielbodart fp32 variant later.)
+
+############### BATTERY_DONE ###############
