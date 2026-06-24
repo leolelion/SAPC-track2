@@ -8,14 +8,21 @@ architecture has a published dysarthric result, and severity-aware + augmentatio
 - **Interspeech 2025 Speech Accessibility Project (SAP) Challenge** — same data family as ours. 12/22 teams
   beat the whisper-large-v2 baseline; **top WER 8.11%**. Every proposed system **fine-tuned a foundation model
   (NVIDIA Parakeet or Whisper) on SAP data**. (arXiv 2507.22047)
-- **Parakeet/FastConformer == Nemotron's architecture.** There is a published paper *"Fine-tuning Parakeet-TDT
-  for Dysarthric Speech Recognition"* (Interspeech 2025). FastConformer fine-tuned on dysarthric data:
-  **WER 28.4% → 19.0%.** NVIDIA also ships an official *"Fine-tuning Nemotron Speech ASR for domain adaptation"*
-  recipe. So our model has a direct, supported adaptation path.
+- **Parakeet/FastConformer == Nemotron's architecture.** The Interspeech 2025 winner paper *"Fine-tuning
+  Parakeet-TDT for Dysarthric Speech Recognition"* (Takahashi et al.) used **Parakeet-TDT 1.1B, OFFLINE (not
+  streaming)**, fully unfrozen, 20 epochs → **Test1 WER 5.97 / Test2 8.11**. NVIDIA also ships a real trainable
+  `.nemo` for our exact model (`nemotron-speech-streaming-en-0.6b.nemo`, 2.47 GB) + an official cache-aware
+  streaming finetune script. So our model has a direct, supported adaptation path.
+  - CORRECTION (verified by independent review 2026-06-25): an earlier version of this doc cited "WER
+    28.4%→19.0% / 36.3%→23.7%" for FastConformer dysarthric finetuning. Those numbers are **NOT** in the
+    Takahashi paper and could not be verified — treat as unsourced; the verified figures are above.
 - Our own evidence agrees: the SAP-finetuned **zipformer A1 = 23% Test1** vs zero-shot Nemotron 51%.
 
-=> **Will finetuning help? Yes, strongly.** Expect Nemotron Test1 51% → roughly **15–20%** from a straight
-SAP finetune, with a higher ceiling than the zipformer (Nemotron median ~7% on mild speech).
+=> **Will finetuning help? Yes — directionally well-supported, but quantify with care.** Every public datapoint
+is **WER on OFFLINE ≥1.1B** models; we'd be running **CER on a STREAMING 0.6B** model — an extrapolation across
+three regime changes. So "51% → ~15–20%" is a HOPE, not a forecast. The honest expectation: competitive with /
+modestly better than the zipformer (23.4%), not a guaranteed blowout. Nemotron's median ~7% on mild speech is
+the reason the ceiling *could* be higher.
 
 ## 2. Severity-aware training targets exactly our failure (the empties)
 - Incorporating **speech-impairment severity** gives significant WER cuts: up to ~16% relative on E2E
