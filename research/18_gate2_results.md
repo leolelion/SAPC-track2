@@ -18,6 +18,18 @@ full finetune; encoder-only is the winning arm.**
 | **smoke encoder-only** | **30.8%** | **9%** | 43.3/23% | 30.0/7% | 40.3% | **7.2/0%** | 27.7/0% |
 | (zipformer, exp A ref) | 29–31% | 5–6% | | | | | |
 
+## VERIFICATION (2026-06-25) — confounds resolved, numbers corrected
+- **Speaker leakage: NONE.** Train=875 speakers, Dev=124, overlap=0; Dev_diag's 103 speakers, 0 in Train. The
+  eval is on genuinely unseen speakers. ✓
+- **Apples-to-apples baseline:** the 47.5%/25% zero-shot baseline used a DIFFERENT path (ONNX submission +
+  local_decode harness at [70,6]). Re-run zero-shot via the SAME NeMo-transcribe-[70,1] path = **43.4% CER /
+  18% empty.** So the CLEAN finetuning gain is **43.4 → 30.8% CER (−12.6 pts), empties 18 → 9%** — real and
+  large, but ~4 pts smaller than first reported. Per-etiology (zero-shot[70,1] → enc-only): ALS 61.1→43.3,
+  CP 45.8→30.0, DS 49.5→40.3, PD 11.2→7.2 (no forgetting), Stroke 31.5→27.7.
+- **STILL OPEN (confound C):** NeMo transcribe ≠ the deployment 100ms-chunk ONNX streaming harness. The 43.4
+  (transcribe) vs 47.5 (ONNX-harness) zero-shot gap proves the inference path matters → the finetuned model's
+  DEPLOYMENT CER must be confirmed via the faithful harness after ONNX export (already the submission gate).
+
 ## What this says
 1. **Finetuning works, and fast.** A *tiny* 4k-utt / 3k-step smoke cut overall CER **47.5 → 30.8%** and empties
    **25 → 9%** on the hard set — already matching the FULLY-finetuned zipformer (29–31%), using 1.3% of the data.
