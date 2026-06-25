@@ -40,17 +40,16 @@ m = nemo_asr.models.EncDecRNNTBPEModel.restore_from(a.base_nemo, map_location="c
 print("[preflight] base optim cfg:", OmegaConf.to_container(m.cfg.optim, resolve=True))
 print("[preflight] base att_context_size:", m.cfg.encoder.get("att_context_size"))
 
-# --- data ---
+# --- data: REPLACE the inherited Lhotse/tarred config with a clean CLASSIC manifest dataloader
+# (base used use_lhotse + text_field=answer + tarred bucketing -> num_buckets=None crash). ---
 with open_dict(m.cfg):
-    m.cfg.train_ds.manifest_filepath = a.train_json
-    m.cfg.train_ds.batch_size = a.bs
-    m.cfg.train_ds.shuffle = (a.mode != "overfit")             # overfit: same batch each epoch
-    m.cfg.train_ds.is_tarred = False
-    m.cfg.train_ds.max_duration = 40.0
-    m.cfg.train_ds.num_workers = 4
-    m.cfg.validation_ds.manifest_filepath = a.val_json
-    m.cfg.validation_ds.batch_size = a.bs
-    m.cfg.validation_ds.num_workers = 2
+    base_ds = {"sample_rate": 16000, "batch_size": a.bs, "num_workers": 4, "pin_memory": True,
+               "use_lhotse": False, "is_tarred": False, "max_duration": 40.0, "min_duration": 0.1,
+               "trim_silence": False, "shuffle_n": 0}
+    m.cfg.train_ds = OmegaConf.create({**base_ds, "manifest_filepath": a.train_json,
+                                       "shuffle": (a.mode != "overfit")})
+    m.cfg.validation_ds = OmegaConf.create({**base_ds, "manifest_filepath": a.val_json,
+                                            "shuffle": False, "num_workers": 2})
 m.setup_training_data(m.cfg.train_ds)
 m.setup_validation_data(m.cfg.validation_ds)
 
