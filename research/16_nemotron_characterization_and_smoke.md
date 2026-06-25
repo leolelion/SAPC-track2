@@ -30,8 +30,10 @@ NeMo ASR doesn't need it. **Measured architecture (use these for the smoke confi
 - Class **EncDecRNNTBPEModel**; **RNN-T** (`RNNTDecoder`, `pred_rnn_layers=2`; `RNNTJoint`, `joint_hidden=640`).
   TDT ruled out. ✓
 - Encoder **ConformerEncoder**, `n_layers=24`, `d_model=1024`, `subsampling=dw_striding` factor **8**, conv_channels 256.
-- **att_context_size = `[[70,13],[70,6],[70,1],[70,0]]`** (multi-lookahead; default/first = `[70,13]`=1040ms;
-  export/submission uses `[70,6]`=480ms; `[70,0]`=0ms = lowest latency). `att_context_style = chunked_limited`.
+- **att_context_size = `[[70,13],[70,6],[70,1],[70,0]]`** (multi-lookahead; chunk sizes per HF card =
+  1120/560/160/80 ms; default/first = `[70,13]`; export/submission uses `[70,6]`=560ms chunk; `[70,0]`=80ms =
+  lowest latency). `att_context_style = chunked_limited`. (Corrected: earlier "480ms" was right-context-only;
+  the model card's chunk size for [70,6] is 560ms.)
 - **`att_context_probs = None`** → trained with uniform sampling across the lookahead list. For finetuning we can
   reweight toward our deployment context (or keep uniform to retain the latency lever).
 - **Tokenizer = SentencePiece BPE, `vocab_size=1024`** (+blank=1024 → matches the export's BLANK_ID). Reuse as-is.

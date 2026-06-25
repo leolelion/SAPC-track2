@@ -46,10 +46,9 @@ def write(path, recs):
 n_tr = write(os.path.join(a.out_dir, "train.json"), train)
 n_dv = write(os.path.join(a.out_dir, "dev_internal.json"), dev)
 
-# Gate-1 overfit set: ~30 short-ish utts from the hard etiologies (the empties we must learn)
+# Gate-1 overfit set: ~30 SHORT utts (<=8s) from the hard etiologies — long utts are bad overfit targets
 hard = {e.strip() for e in a.hard_etiologies.split(",")}
-hard_rows = [r for r in train if r["etiology"] in hard]
-random.shuffle(hard_rows)
+hard_rows = sorted([r for r in train if r["etiology"] in hard and r["_dur"] <= 8.0], key=lambda r: r["_dur"])
 write(os.path.join(a.out_dir, "overfit.json"), hard_rows[:30])
 
 # Gate-2 smoke train subset

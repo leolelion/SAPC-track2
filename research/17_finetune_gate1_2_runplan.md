@@ -5,6 +5,24 @@ d1024, RNN-T (2-layer pred RNN, joint 640), BPE vocab 1024, att_context `[[70,13
 FastEmit 0.005, English-only. Scripts: `prep_nemo_manifest.py`, `nemo_finetune.py`. **Nothing here runs training
 without sign-off.**
 
+## Independent review applied (v2, 2026-06-25)
+A cold NeMo-engineer review found real bugs; `nemo_finetune.py` is fixed:
+- **Explicit optimizer** (adamw+cosine) replacing the inherited scheduler + **`setup_optimization()`** call —
+  fixes the "optimizer never rebuilt" bug AND the Noam-LR-is-a-scale trap (raw lr now means raw lr).
+- **Single flat training context** via `encoder.set_default_att_context_size()` (the assignment to
+  `cfg.encoder.att_context_size` did NOT re-take on the built encoder). Multi-lookahead + `att_context_probs`
+  deferred to the full run. Smoke trains at `[70,1]` (low-latency lever) by default.
+- **Punctuation-stripped overfit CER** (model emits punct+caps; targets are normalized) — else Gate 1 fails for
+  the wrong reason. **Dataloader-length guard** for the smoke run (the ~1000-cap trap). Overfit utts now **≤8s**.
+- Still TODO for the full run (not gates): **val-WER logging + checkpoint averaging + a LoRA arm**; and a
+  decision to possibly drive NeMo's official `examples/asr/speech_to_text_finetune.py` via Hydra instead of the
+  custom script (it handles optim/data/trainer wiring natively — the safer long-term path).
+
+## Step A0 — PRE-FLIGHT (1 min, settles the 2 unverified items) [v2]
+First lines of the overfit run already print `base optim cfg` (→ confirm scheduler name / whether it was Noam)
+and `att_context now = …` (→ confirm `set_default_att_context_size` actually re-took). Read these before trusting
+the run. If att_context didn't re-take or optim looks wrong → switch to the official Hydra script.
+
 ## Step A — persistent venv + data prep (cheap, no training)
     source /workspace/nemoenv/bin/activate         # idempotent build if absent (one-time, on /workspace)
     python3 /workspace/prep_nemo_manifest.py \
