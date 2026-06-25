@@ -4,11 +4,30 @@ Revised 2026-06-25 after self-critique + an independent skeptical review. Ground
 packaging solved ([[submission-offline-packaging]]); validation gated by the real harness
 ([[validate-against-real-harness]]). **Changes from v1 are marked [v2].**
 
-## 0. PREREQUISITE GATE — run exp A FIRST [v2]
-Before committing any finetune GPU, run `scripts/run_expA_beam4.sh`: decode the **already-SAP-finetuned
-zipformer on the exact 425-utt set Nemotron fails on**. If the zipformer already recovers those empties at low
-CER, finetuning Nemotron may be **unnecessary** (the zipformer + beam-4 + LM is the cheaper path to the same
-place). **This experiment gates the whole plan.** (Currently queued/running.)
+## 0. EVIDENCE STATUS — read before trusting any number in this plan [v3]
+**We have ZERO direct evidence for the actual task: finetuning a 0.6B STREAMING FastConformer on dysarthric
+speech.** All evidence is transfer-by-analogy:
+- The dysarthric-finetuning recipe/numbers come from **Parakeet-TDT 1.1B, OFFLINE** — different size, context
+  regime, base data, tokenizer, and possibly a prompt/TDT mechanism (our finetune config is
+  `..._streaming_PROMPT.yaml`; the exported decoder is plain RNN-T → train-graph ≠ export-graph).
+- exp A (the rescue test) used the **zipformer** — a *completely different* architecture (icefall, not
+  FastConformer). It proves *a* finetuned model rescues Nemotron's failures, NOT that finetuning *Nemotron* does.
+
+Split the evidence accordingly:
+- **DIRECTIONAL ("finetuning on SAP helps a lot") = robust** — holds across Whisper, Parakeet, wav2vec2, AND our
+  zipformer. Not Parakeet-dependent. High confidence.
+- **RECIPE + NUMBERS (LR, 20 epochs, "train fully unfrozen", "~6% WER / 15–20% CER") = Parakeet-1.1B-offline
+  specific → PRIORS TO ABLATE, not settings.** In particular, "train fully unfrozen" (§5) was imported from the
+  Parakeet paper; a smaller streaming model on limited data may instead favor **freezing / LoRA** to avoid
+  overfitting + catastrophic forgetting of the mild-speech competence that is our whole reason for Nemotron.
+
+## 0b. GATES (cheap → expensive) [v3 reorders]
+- **exp A — DONE** ([[15_expA_beam4_results]]): SAP-finetuned zipformer cut the hard-set CER 47.5→29–31%,
+  empties 25→6%, rescued 53% of Nemotron's catastrophic failures. => the data IS adaptable (directional green).
+  Does NOT prove the Nemotron-specific path works.
+- **NEW true gate — direct Nemotron finetune smoke** (§9 gate 1–3): characterize the model, overfit a batch,
+  tiny-subset finetune; confirm *Nemotron's own* failures move AND its mild-speech edge survives. Only this
+  gates the full Nemotron run.
 
 ## 1. Base model — VERIFIED trainable [v2]
 - `nvidia/nemotron-speech-streaming-en-0.6b` ships a real **`.nemo` (2.47 GB)**, not just ONNX (NVIDIA Open
@@ -82,17 +101,29 @@ Likely silent CER killer. Nemotron-Speech natively emits **punctuation + capital
   recipe (local-mel, bundled ORT wheel, no NeMo/network). **[v2] Validate offline-vs-streaming CER delta**, not
   just "it exports" — a small delta confirms streaming parity survived finetuning.
 
-## 9. GATES (ordered) [v2]
-0. **exp A** says the zipformer doesn't already solve it → proceed; else reconsider.
-1. **Overfit-a-single-batch** (NEW): ~20–50 hard utts (ALS/CP), **augmentation OFF**, drive train CER → ~0.
-   If it can't, the pipeline (data/target alignment, loss, backprop, optim) is broken — STOP, fix, before any
-   real spend. (Distinct from, and prior to, the loss-decreases smoke test.)
-2. **Target-text ablation** resolved (§2b) before full training.
-3. **Smoke** (subset, few epochs): internal-dev CER drops meaningfully vs zero-shot, decodes sane, dataloader
-   sees full data (not the 1000-cap).
-4. **Subset finetune** + faithful-harness eval gate.
-5. **Full finetune** + avg-5 + export + offline-validate + streaming-parity delta + faithful Dev eval.
-6. Gates green → ONE validated Codabench submission.
+## 9. GATES (ordered) [v3]
+0. **MODEL CHARACTERIZATION (NEW, before any training).** Load the `.nemo` and answer: is the decoder TDT or
+   RNN-T? what is the `_streaming_prompt` mechanism (a prompt token? context conditioning?) and does finetuning
+   need to feed/preserve it? does the train graph match the exported RNN-T inference path? what `att_context`
+   list + `att_context_probs` does the streaming config use? Until these are known, every hyperparameter is a
+   guess. (The Parakeet evidence cannot answer any of this.)
+1. **Overfit-a-single-batch:** ~20–50 hard utts (ALS/CP), **augmentation OFF**, drive train CER → ~0. If it
+   can't, the pipeline (data/target alignment, loss, backprop, optim, prompt handling) is broken — STOP.
+2. **DIRECT NEMOTRON SMOKE (the real go/no-go) [v3]:** tiny-subset finetune of the actual `.nemo`; confirm
+   (a) Nemotron's OWN empties/failures move on internal-dev, and (b) its **mild-speech CER does NOT regress**
+   (catastrophic-forgetting check — the median-7% is the whole reason to use Nemotron). exp A only showed a
+   *different* model adapts; this is the first Nemotron-specific evidence. No-go here ⇒ don't spend the full run.
+3. **Freeze/LoRA ablation [v3]:** small head-to-head — full-unfrozen vs partial-freeze vs **LoRA/adapter** (a SAP
+   winner used AdaLoRA). Do NOT default to "fully unfrozen" (that was a Parakeet-1.1B import); pick by dev CER +
+   forgetting. Consider mixing in general/typical speech or KD to limit forgetting.
+4. **Target-text ablation** (§2b) resolved before full training.
+5. **Subset finetune** + faithful-harness eval gate (dataloader sees full data, not the ~1000-cap).
+6. **Full finetune** + avg-5 + export + offline-validate + streaming-parity delta + faithful Dev eval.
+7. Gates green → ONE validated Codabench submission.
+
+**Expectation reframe [v3]:** we'd be the FIRST to finetune a 0.6B streaming FastConformer on dysarthric speech.
+Directional confidence (it will help) is high; the achievable CER is genuinely unknown and the Parakeet numbers
+do not bound it. Treat ≤20% CER as an aspiration to test, not a forecast.
 
 ## 10. Open risks / unverified
 - Whether the `.nemo` finetune config preserves multi-lookahead by default (verify in the YAML).
