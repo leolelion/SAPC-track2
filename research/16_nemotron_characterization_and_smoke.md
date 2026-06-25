@@ -23,7 +23,27 @@ specifies the cheap experiment that replaces Parakeet-analogy with Nemotron-dire
 4. **Export path exists.** NeMo exports cache-aware RNNT to **3 ONNX (encoder/decoder/joiner)**, per-component
    int8 → drops straight into our validated offline zip ([[submission-offline-packaging]]).
 
-## Gate-0 partial results (2026-06-25) — from the HF model card + a failed load attempt
+## Gate-0 COMPLETE (2026-06-25) — MEASURED from the loaded `.nemo` (isolated venv)
+Env validated: an isolated `/workspace` venv with `nemo_toolkit[asr]` loads the model
+(`EncDecRNNTBPEModel ... successfully restored`, `cuda True`). torchvision is simply *absent* (not broken) —
+NeMo ASR doesn't need it. **Measured architecture (use these for the smoke config, not Parakeet guesses):**
+- Class **EncDecRNNTBPEModel**; **RNN-T** (`RNNTDecoder`, `pred_rnn_layers=2`; `RNNTJoint`, `joint_hidden=640`).
+  TDT ruled out. ✓
+- Encoder **ConformerEncoder**, `n_layers=24`, `d_model=1024`, `subsampling=dw_striding` factor **8**, conv_channels 256.
+- **att_context_size = `[[70,13],[70,6],[70,1],[70,0]]`** (multi-lookahead; default/first = `[70,13]`=1040ms;
+  export/submission uses `[70,6]`=480ms; `[70,0]`=0ms = lowest latency). `att_context_style = chunked_limited`.
+- **`att_context_probs = None`** → trained with uniform sampling across the lookahead list. For finetuning we can
+  reweight toward our deployment context (or keep uniform to retain the latency lever).
+- **Tokenizer = SentencePiece BPE, `vocab_size=1024`** (+blank=1024 → matches the export's BLANK_ID). Reuse as-is.
+- **Loss = `warprnnt_numba` with `fastemit_lambda=0.005`** already enabled (FastEmit → earlier emission / lower
+  TTFT). Keep it; it's latency-favorable for Track 2.
+- No language/prompt head present (English-only). ✓
+**Venv location:** this run built on `/opt` (container disk, 20GB free) = EPHEMERAL. Script now fixed to build on
+`/workspace/nemoenv` (persistent) + idempotent reuse → one more build next session, then reuse forever.
+**Still to decide (the one real open item):** target-text case/punct (model emits punct+caps; SAP refs are
+normalized) — ablate before full training.
+
+## (superseded) earlier partial results — from the HF model card + a failed load attempt
 - **Confirmed:** 24 FastConformer layers, **RNNT** decoder (not TDT), 600M, **English-only** (no language head
   to manage — simplest case), native punct+caps.
 - **att_context is MULTI-LOOKAHEAD:** `[70,0]`, `[70,1]`, `[70,6]`, `[70,13]` (left=70×80ms=5.6s; right =
