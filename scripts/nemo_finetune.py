@@ -91,12 +91,13 @@ trainable = sum(p.numel() for p in m.parameters() if p.requires_grad) / 1e6
 print(f"[optim] adamw lr={LR} cosine warmup={WARMUP} | trainable {trainable:.1f}M | max_steps={MAX_STEPS}")
 
 torch.set_float32_matmul_precision("high")                     # use H200 tensor cores
+# No in-training validation for the gates (avoids all val_check_interval-vs-batch-count crashes);
+# the post-train transcribe + held-out Dev_diag eval are the real signals.
 tk = dict(accelerator="gpu", devices=1, precision="bf16-mixed", max_steps=MAX_STEPS,
-          num_sanity_val_steps=0, logger=False, enable_checkpointing=False, default_root_dir=a.out_dir)
+          num_sanity_val_steps=0, logger=False, enable_checkpointing=False, default_root_dir=a.out_dir,
+          limit_val_batches=0.0)
 if a.mode == "overfit":
-    tk.update(limit_train_batches=1, limit_val_batches=0.0)     # 1 batch/epoch, NO validation
-else:
-    tk.update(limit_train_batches=1.0, limit_val_batches=20, val_check_interval=500)
+    tk["limit_train_batches"] = 1
 trainer = pl.Trainer(**tk)
 m.set_trainer(trainer)
 print(f"=== fit ({a.mode}, freeze={a.freeze}) ===")
