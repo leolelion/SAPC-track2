@@ -6,10 +6,10 @@ O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout
 REPO=/Users/o/Downloads/SAPC-template
 SCRIPTS="run_expA_beam4.sh build_diag_manifest.py diag_crosstab.py nemotron_repro_analyze.py setup_zf_sub.sh"
 
-echo "[autorun] $(date) waiting for GPU slot ..."
-for i in $(seq 1 60); do
+echo "[autorun] $(date) waiting for GPU slot (long window ~6h) ..."
+for i in $(seq 1 360); do
   runpodctl pod start $ID >/dev/null 2>&1; sleep 5
-  runpodctl get pod $ID 2>/dev/null | grep -q RUNNING && { echo "[autorun] RUNNING (try $i)"; break; }
+  runpodctl get pod $ID 2>/dev/null | grep -q RUNNING && { echo "[autorun] RUNNING (try $i) $(date)"; break; }
   sleep 55
 done
 runpodctl get pod $ID 2>/dev/null | grep -q RUNNING || { echo "[autorun] POD_NEVER_STARTED"; exit 1; }
