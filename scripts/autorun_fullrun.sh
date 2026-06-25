@@ -5,6 +5,7 @@ KEY=/Users/o/.runpod/ssh/RunPod-Key-Go
 O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=40 -o ServerAliveInterval=20"
 REPO=/Users/o/Downloads/SAPC-template
 
+echo "$$" > /tmp/sapc_autorun.lock   # claim ownership; a newer autorun overwrites this -> older won't pod-stop
 echo "[autorun] $(date) waiting for GPU slot (~6h window) ..."
 for i in $(seq 1 360); do
   runpodctl pod start $ID >/dev/null 2>&1; sleep 5
@@ -34,5 +35,9 @@ for i in $(seq 1 800); do        # up to ~6.6h
 done
 scp -P $PORT -i $KEY $O root@$HOST:/workspace/finetune/nemo_ft/fullrun.log /Users/o/Downloads/fullrun.log 2>/dev/null
 echo "========== FULL RUN LOG =========="; grep -avE 'CPU_DIAGNOSTIC|CUDA graphs|it/s\]|Epoch [0-9]+:' /Users/o/Downloads/fullrun.log 2>/dev/null | tail -120 || echo "(none)"; echo "================================"
-echo "[autorun] stopping pod ..."; runpodctl pod stop $ID 2>&1 | grep -i desiredStatus
+if [ "$(cat /tmp/sapc_autorun.lock 2>/dev/null)" = "$$" ]; then
+  echo "[autorun] stopping pod ..."; runpodctl pod stop $ID 2>&1 | grep -i desiredStatus
+else
+  echo "[autorun] a NEWER autorun owns the pod -> NOT stopping (avoids killing a live run)"
+fi
 echo "[autorun] DONE $(date)"
