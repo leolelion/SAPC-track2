@@ -13,10 +13,15 @@ for i in $(seq 1 360); do
   sleep 55
 done
 runpodctl get pod $ID 2>/dev/null | grep -q RUNNING || { echo "[autorun] POD_NEVER_STARTED"; exit 1; }
-sleep 25
-EP=$(runpodctl get pod $ID -a 2>/dev/null | grep -oE '[0-9.]+:[0-9]+->22' | sed 's/->22//' | sed -n '1p')
-HOST=${EP%:*}; PORT=${EP##*:}; echo "[autorun] $HOST:$PORT"
-[ -n "$PORT" ] || { echo "[autorun] NO_PORT"; exit 1; }
+sleep 20
+PORT=""; HOST=""
+for k in $(seq 1 15); do   # poll until the network endpoint is assigned (race fix)
+  EP=$(runpodctl get pod $ID -a 2>/dev/null | grep -oE '[0-9.]+:[0-9]+->22' | sed 's/->22//' | sed -n '1p')
+  HOST=${EP%:*}; PORT=${EP##*:}
+  [ -n "$PORT" ] && { echo "[autorun] endpoint $HOST:$PORT (after ${k} tries)"; break; }
+  sleep 10
+done
+[ -n "$PORT" ] || { echo "[autorun] NO_PORT after retries -> STOPPING pod to avoid cost leak"; runpodctl pod stop $ID >/dev/null 2>&1; exit 1; }
 
 for f in $SCRIPTS; do scp -P $PORT -i $KEY $O "$REPO/scripts/$f" root@$HOST:/workspace/ >/dev/null 2>&1; done
 ssh -p $PORT -i $KEY $O root@$HOST 'mkdir -p /workspace/finetune/zf_a1_sub' 2>/dev/null
