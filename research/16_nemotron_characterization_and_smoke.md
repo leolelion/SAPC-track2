@@ -23,6 +23,28 @@ specifies the cheap experiment that replaces Parakeet-analogy with Nemotron-dire
 4. **Export path exists.** NeMo exports cache-aware RNNT to **3 ONNX (encoder/decoder/joiner)**, per-component
    int8 → drops straight into our validated offline zip ([[submission-offline-packaging]]).
 
+## Gate-0 partial results (2026-06-25) — from the HF model card + a failed load attempt
+- **Confirmed:** 24 FastConformer layers, **RNNT** decoder (not TDT), 600M, **English-only** (no language head
+  to manage — simplest case), native punct+caps.
+- **att_context is MULTI-LOOKAHEAD:** `[70,0]`, `[70,1]`, `[70,6]`, `[70,13]` (left=70×80ms=5.6s; right =
+  {0,80,480,1040} ms). Submission runs `[70,6]`. **LATENCY LEVER:** finetune/deploy at `[70,0]`/`[70,1]` to cut
+  TTFT (Track-2 is latency-scored), trading some CER. Sweep this.
+- **d_model / vocab / att_context_probs / tokenizer:** still need the in-`.nemo` `model_config.yaml`
+  (`scripts/nemo_characterize.py` now reads it dependency-free via tar — the `.nemo` is downloaded + persisted
+  at `/workspace/finetune/nemo_ft/`; run on the next pod window, seconds). NOTE: NeMo's finetune loads d_model/
+  vocab/tokenizer from the checkpoint automatically, so these are confirm-only, not blocking.
+
+## ⚠️ REAL BLOCKER surfaced by the failed Gate-0 (cheap catch, high value)
+`pip install nemo_toolkit[asr]` into the pod's `pytorch:2.4.0` image **upgraded torch 2.4.1 → 2.12.1**, breaking
+the pre-built torchvision/torchaudio (`RuntimeError: operator torchvision::nms does not exist`). **A working NeMo
+training env is the prerequisite for ALL of Gate 1/2 (any finetuning), and naive pip install does NOT give one.**
+Options, to decide before the next pod run:
+- (A) **Launch the pod from an NVIDIA NeMo container** (`nvcr.io/nvidia/nemo:*`) — our `/workspace` MooseFS volume
+  persists across images, so we keep all data + get a consistent NeMo/torch/vision/audio stack. Cleanest.
+- (B) Pin a NeMo version compatible with the image's torch 2.4.1 (risk: may be too old to load a Jan-2026 model).
+- (C) After NeMo upgrades torch, reinstall matching torchvision+torchaudio for the new torch (finicky version match).
+Recommendation: (A).
+
 ## Remaining unknowns — resolved ONLY by loading the actual checkpoint (Gate 0)
 - Exact `att_context_size` list of the released `en-0.6b` (export used `[70,6]` ≈ 5.6s left / 480ms right) and
   whether it is multi-lookahead (has `att_context_probs`).
