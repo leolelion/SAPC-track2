@@ -36,6 +36,25 @@ finetune. Net: direction validated, but DON'T fire the full run yet — do the c
    checkpoint averaging** (avg top-5) — currently TODO, not implemented in nemo_finetune.py.
 6. SpecAugment: verify config sane for dysarthria (don't inherit blindly); aggressive time-masking can hurt.
 
+## PRE-RUN EXPERIMENT RESULTS (2026-06-25)
+- **EXP1a — ONNX export: ✓ WORKS.** Finetuned enc-only exported with `set_export_config({'cache_support':'True'})`
+  → `encoder-model.onnx` + `decoder_joint-model.onnx` (cache-aware streaming graphs). Finetuned-deploy path proven.
+  (Integration note: NeMo's I/O names differ from danielbodart's; name-matching needed when wiring into
+  `local_decode.py` submission model.py at packaging.)
+- **EXP2 — target-text ablation: WASH (no lever).** Cased+punct = 30.7% CER / 10% empty vs normalized 30.8% / 9%
+  on Dev_diag. Identical within noise → the agent's "normalized costs several pts" did NOT materialize, because
+  the official scorer normalizes both sides. **DECISION: keep `norm_text_without_disfluency`** (marginally fewer
+  empties). One open question CLOSED.
+- **EXP1b — streaming-sim: DEFERRED.** NeMo's `speech_to_text_cache_aware_streaming_infer.py` hung on `--help`
+  (heavy import) in our env. The deployment-faithful true-streaming CER (confound C) will be resolved
+  authoritatively at packaging via **ONNX → `local_decode.py`** (the real submission gate) rather than the NeMo
+  sim script.
+
+## Locked full-run config decisions
+- Target text = normalized (wash). Export path = works. Confound C → resolved at ONNX+local_decode packaging.
+- Still to set: multi-lookahead training w/ `att_context_probs`; LR ~1e-4 + ~10-20% warmup; replay slice +
+  clean-English probe; checkpoint averaging (avg top-5).
+
 ## Recommended next (cheap, smoke-scale, before the full run)
 - Run #2 (export + faithful harness on the existing enc-only smoke checkpoint) and #1 (target-text ablation)
   together — both reuse the smoke checkpoint / a quick smoke re-run, both decisive, ~1 pod session.
