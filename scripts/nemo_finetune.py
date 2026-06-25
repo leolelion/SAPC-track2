@@ -90,13 +90,14 @@ m.setup_optimization(m.cfg.optim)
 trainable = sum(p.numel() for p in m.parameters() if p.requires_grad) / 1e6
 print(f"[optim] adamw lr={LR} cosine warmup={WARMUP} | trainable {trainable:.1f}M | max_steps={MAX_STEPS}")
 
-trainer = pl.Trainer(
-    accelerator="gpu", devices=1, precision="bf16-mixed", max_steps=MAX_STEPS,
-    limit_train_batches=(1 if a.mode == "overfit" else 1.0),
-    val_check_interval=(50 if a.mode == "overfit" else 500),
-    num_sanity_val_steps=0, logger=False, enable_checkpointing=False,
-    default_root_dir=a.out_dir,
-)
+torch.set_float32_matmul_precision("high")                     # use H200 tensor cores
+tk = dict(accelerator="gpu", devices=1, precision="bf16-mixed", max_steps=MAX_STEPS,
+          num_sanity_val_steps=0, logger=False, enable_checkpointing=False, default_root_dir=a.out_dir)
+if a.mode == "overfit":
+    tk.update(limit_train_batches=1, limit_val_batches=0.0)     # 1 batch/epoch, NO validation
+else:
+    tk.update(limit_train_batches=1.0, limit_val_batches=0.2, val_check_interval=500)
+trainer = pl.Trainer(**tk)
 m.set_trainer(trainer)
 print(f"=== fit ({a.mode}, freeze={a.freeze}) ===")
 trainer.fit(m)
