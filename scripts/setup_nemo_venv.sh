@@ -7,19 +7,22 @@ OUT=/workspace/finetune/nemo_ft; mkdir -p "$OUT"
 LOG="$OUT/venv_setup.log"; : > "$LOG"; exec > >(tee -a "$LOG") 2>&1
 NEMO="$OUT/nemotron-speech-streaming-en-0.6b.nemo"
 
-echo "=== $(date) build isolated NeMo venv ==="
-# prefer fast container disk; fall back to /workspace (MooseFS) if tight
-VENV=/opt/nemoenv
-avail=$(df -m /opt 2>/dev/null | awk 'NR==2{print $4}')
-echo "/opt avail MB: ${avail:-?}"
-[ "${avail:-0}" -lt 14000 ] && { VENV=/workspace/nemoenv; echo "container disk tight -> venv on /workspace"; }
+echo "=== $(date) ensure isolated NeMo venv ==="
+# MUST live on /workspace (MooseFS network volume) -> persists across pod stop/start/recreate.
+# The container disk resets each cycle, so a venv there would need rebuilding every time.
+VENV=/workspace/nemoenv
 echo "VENV=$VENV"
-rm -rf "$VENV"
-python3 -m venv "$VENV"
-source "$VENV/bin/activate"
-python -m pip install -q --upgrade pip
-echo "=== install nemo_toolkit[asr] (several GB, ~15-30 min) ==="
-pip install -q "nemo_toolkit[asr]" huggingface_hub 2>&1 | tail -12
+if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c "import nemo.collections.asr" 2>/dev/null; then
+  echo "=== existing working NeMo venv found -> REUSE (no rebuild) ==="
+  source "$VENV/bin/activate"
+else
+  echo "=== building NeMo venv (one-time, ~15-30 min) ==="
+  rm -rf "$VENV"
+  python3 -m venv "$VENV"
+  source "$VENV/bin/activate"
+  python -m pip install -q --upgrade pip
+  pip install -q "nemo_toolkit[asr]" huggingface_hub 2>&1 | tail -12
+fi
 
 echo "=== verify consistent stack ==="
 python -c "import torch,torchvision,torchaudio,nemo; print('torch',torch.__version__,'| tv',torchvision.__version__,'| ta',torchaudio.__version__,'| nemo',nemo.__version__)" 2>&1 | tail -3 || echo STACK_IMPORT_FAIL
