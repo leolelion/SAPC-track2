@@ -122,7 +122,7 @@ if len(ckpts) >= 2:
     print(f"[avg] averaging {len(ckpts)} checkpoints")
     avg = None; n = 0
     for c in ckpts:
-        sd = torch.load(c, map_location="cpu").get("state_dict", {})
+        sd = torch.load(c, map_location="cpu", weights_only=False).get("state_dict", {})
         if not sd: continue
         n += 1
         if avg is None: avg = {k: v.float().clone() for k, v in sd.items()}
