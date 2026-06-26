@@ -104,7 +104,7 @@ if a.mode == "overfit":
     tk.update(max_steps=MAX_STEPS, limit_train_batches=1, limit_val_batches=0.0, enable_checkpointing=False)
 else:
     # val once per epoch (always valid) + top-5 ckpt on val_wer + early-stop
-    tk.update(limit_val_batches=30, check_val_every_n_epoch=1, enable_checkpointing=True)
+    tk.update(limit_val_batches=1.0, check_val_every_n_epoch=1, enable_checkpointing=True)  # full internal-dev (was noisy 30-batch)
     if a.epochs: tk.update(max_epochs=a.epochs)
     else:        tk.update(max_steps=MAX_STEPS)
     ckpt = ModelCheckpoint(dirpath=a.out_dir, save_top_k=5, monitor="val_wer", mode="min",
@@ -120,17 +120,20 @@ out_nemo = os.path.join(a.out_dir, f"ft_{a.mode}_{a.freeze}.nemo")
 ckpts = sorted(glob.glob(os.path.join(a.out_dir, "ft-*.ckpt")))
 if len(ckpts) >= 2:
     print(f"[avg] averaging {len(ckpts)} checkpoints")
+    # average ONLY floating-point parameter tensors; keep integer buffers (num_batches_tracked etc.) from ckpt 1
     avg = None; n = 0
     for c in ckpts:
         sd = torch.load(c, map_location="cpu", weights_only=False).get("state_dict", {})
         if not sd: continue
         n += 1
-        if avg is None: avg = {k: v.float().clone() for k, v in sd.items()}
+        if avg is None:
+            avg = {k: (v.float().clone() if v.is_floating_point() else v.clone()) for k, v in sd.items()}
         else:
             for k in avg:
-                if k in sd: avg[k] += sd[k].float()
+                if k in sd and avg[k].is_floating_point(): avg[k] += sd[k].float()
     if avg and n:
-        for k in avg: avg[k] /= n
+        for k in avg:
+            if avg[k].is_floating_point(): avg[k] /= n
         m.load_state_dict(avg, strict=False)
         print(f"[avg] loaded average of {n} ckpts")
 m.save_to(out_nemo); print("saved", out_nemo)
