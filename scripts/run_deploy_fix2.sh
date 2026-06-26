@@ -25,7 +25,7 @@ old="        for f_idx in range(n_enc):"
 new=("        if self._step_num == 0 and not is_drain:\n"
      "            return   # skip emission on warmup first chunk (leading silence)\n"
      "        for f_idx in range(n_enc):")
-assert old in s; open(p,"w").write(s.replace(old,new)); print("skip-first-chunk patched OK")
+import sys; assert old in s; open(p,"w").write(s.replace(old,new)); print("skip-first-chunk patched OK", file=sys.stderr)
 PY
   echo "$SUB"
 }
