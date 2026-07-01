@@ -1,0 +1,116 @@
+# Nemotron Speed Investigation Log
+
+## 2026-06-22
+
+- Read `HANDOFF_NEMOTRON_CODEX.md`, `/Users/o/Downloads/CLAUDE.md`, repo `CLAUDE.md`, and repo `AGENTS.md`.
+- Noted direction change: `research/10_nemotron_verdict.md` recommends stopping Nemotron, while the handoff reopens it as a speed-gated optimization effort.
+- Verified local extracted handoff files exist at `/tmp/nemo_hand/{model.py,localmel.py,config.yaml,setup.sh,tokens.txt}`.
+- Verified full local submission zip exists at `/Users/o/Downloads/nemo_submission.zip` and extracted it to `/tmp/nemo_submission_codex_profile`.
+- Confirmed exact submission ONNX I/O:
+  - Encoder inputs: `audio_signal`, `length`, `cache_last_channel`, `cache_last_time`, `cache_last_channel_len`.
+  - Encoder outputs: `outputs`, `encoded_lengths`, next channel/time caches, next cache length.
+  - Decoder inputs: `encoder_outputs`, `targets`, `target_length`, `input_states_1`, `input_states_2`.
+  - Decoder outputs: `outputs`, `prednet_lengths`, `output_states_1`, `output_states_2`.
+- Confirmed by code inspection:
+  - `_ensure_features()` recomputes log-mel features over the full accumulated utterance whenever new audio is needed.
+  - `_encode_and_decode()` calls `decoder_model.onnx` inside a Python loop over encoder frames and up to 10 symbols per frame.
+  - `config.yaml` claims thread tunables, but `model.py` does not read it; runtime threads come from `SAPC2_THREADS` or default `4`.
+- Confirmed by static ONNX inspection:
+  - Encoder graph has 6911 nodes, opset 17, with quantized matmul structure (`MatMulInteger`, `DynamicQuantizeLinear`) plus 77 `Conv` nodes.
+  - Decoder graph has 42 nodes and no duration/TDT output; outputs are logits, prednet length, and two LSTM states.
+- Local provisional hardware: MacBook Air M3, 8 cores (4 performance + 4 efficiency), 8 GB RAM, macOS arm64. This is not the Codabench target.
+- Local synthetic speech sample generated with macOS `say`, 8.509 s after resampling to 16 kHz.
+- Local single-stream pilot:
+  - One 2.0 s noise run: RTF 0.489, encoder 0.910 s, decoder 0.025 s, feature 0.041 s. Blank-heavy, underexercises decoder.
+  - One 8.509 s speech run: RTF 0.257, encoder 2.000 s, decoder 0.109 s, feature 0.074 s, 17 encoder calls, 168 decoder calls, 16 feature calls, 9.0x redundant feature samples.
+  - 12-run warm steady-state speech repeat: RTF p50 0.116 / p90 0.124, encoder p50 0.890 s, decoder p50 0.080 s, feature p50 0.017 s.
+  - One real-time-paced speech run after warmup: first partial visible at 1.180 s from audio start, compute RTF 0.160.
+- Local ONNX Runtime profiling on the speech sample:
+  - Encoder node total 1412 ms: `Conv` 466 ms, `MatMulIntegerToFloat` 328 ms, `DynamicQuantizeMatMul` 272 ms.
+  - Decoder node total 84.7 ms: `LSTM` 53.1 ms, `MatMul` 9.7 ms, `FusedMatMul` 5.9 ms.
+- Corrected a mistaken interim interpretation: the extracted encoder graph contains `MatMulInteger` / `DynamicQuantizeLinear`, which matches the exporter card's dynamic-int8 CPU path more than static QDQ.
+- Inspected local `sherpa_onnx==1.12.29` API:
+  - `OnlineTransducerModelConfig` requires separate `encoder`, `decoder`, and `joiner` files.
+  - `OnlineNeMoCtcModelConfig` exists, but no direct online NeMo RNNT/FastConformer config was exposed locally.
+- Drafted initial literature review, recommendation, and experiment plan in `research/02_literature_review.md`, `research/03_recommendation.md`, and `research/04_experiment_plan.md`.
+- Added reusable single-stream benchmark harness: `scripts/bench_nemotron_single_stream.py`.
+- Verified harness locally with:
+  - `python3 scripts/bench_nemotron_single_stream.py --submission-dir /tmp/nemo_submission_codex_profile --audio /tmp/nemo_say_sample.aiff --runs 2 --warmup-runs 1 --threads 4`
+  - Result matched earlier pilot: RTF about 0.115, 17 encoder calls, 168 decoder calls, 16 feature calls.
+  - `python3 -m py_compile scripts/bench_nemotron_single_stream.py` passed.
+- Read-only RunPod status check for handoff pod `3dwiczo41jeg1y` succeeded:
+  - Status: `EXITED`; last status change: 2026-06-22 16:39:27 UTC.
+  - Reported shape: 24 vCPU, 251 GB RAM, 1 GPU, cost $4.39/hr.
+  - Pod was not started.
+
+Open blockers:
+- Need Codabench/Test1 ingestion log containing `[CPU_DIAGNOSTIC]` to identify the actual worker CPU.
+- Need SAP Dev/streaming data or pod access to measure real dysarthric utterance decoder behavior and official CER guardrail.
+- Need Linux worker/pod profile before accepting local Mac bottleneck ranking as target truth.
+- Warmup ruling after reading `Track2.md` and local `local_decode.py`: bounded synthetic warmup in `__init__()` is technically viable and should not directly enter TTFT/TTLT timestamps, but it spends total submission time and may repeat per worker in the batch pass. Do not warm up in per-file/in-stream methods.
+- Started RunPod pod `3dwiczo41jeg1y` for speed experiments. SSH became available on 2026-06-22; pod reported 192 logical CPUs, dual Intel Xeon Platinum 8568Y+, 2.0 TiB RAM.
+- Installed the submission's bundled ONNX Runtime via `/workspace/finetune/nemo_submission/setup.sh`; NumPy was already present and was not replaced.
+- E1 baseline profile on pod/Linux, real SAP Dev audio, 15 utterances, threads=4:
+  - RTF p50 0.130, p90 0.152.
+  - Encoder p50 1.194 s, decoder p50 0.070 s, feature p50 0.030 s.
+  - Feature recompute factor p50 9.1x, p90 26.1x.
+- E2 thread sweep on 9 utterances:
+  - threads=1 RTF p50 0.366, p90 0.502.
+  - threads=2 RTF p50 0.173, p90 0.213.
+  - threads=4 RTF p50 0.130, p90 0.156.
+  - threads=8 RTF p50 0.113, p90 0.137.
+- E3 cold/no-warmup at threads=4:
+  - RTF p50 0.134, p90 0.158, first partial proxy p50 0.481 s.
+  - Warmed threads=4 comparison was RTF p50 0.130, p90 0.156, first partial proxy p50 0.445 s.
+  - Conclusion: warmup effect is small in this setup and probably redundant before the streaming pass because the local harness runs batch accuracy first.
+- E4 ONNX profile on one 28.5 s long utterance, threads=8:
+  - Encoder node total 2906.6 ms; decoder node total 147.1 ms.
+  - Encoder top ops: Transpose 603 ms, DynamicQuantizeMatMul 515 ms, Conv 328 ms, MatMulIntegerToFloat 328 ms.
+  - Decoder top ops: LSTM 84.9 ms, MatMul 19.0 ms, FusedMatMul 10.8 ms.
+- Local experiment artifacts copied to `experiments/exp_nemotron_speed_001/`.
+- Stopped RunPod pod `3dwiczo41jeg1y` after copying results locally.
+- New evidence from prior Codabench ingestion log supplied by Q on 2026-06-23:
+  - `Number of workers: 20`.
+  - This makes CPU oversubscription the leading hypothesis for the Test1 collapse: current Nemotron defaults to 4 ORT/PyTorch threads per model process, so the batch accuracy pass can create about 80 compute threads plus 20 heavyweight model instances.
+  - Next non-submission experiment should reproduce this topology offline: 20 worker processes constrained to a 20-ish CPU cpuset, sweeping per-process threads 1/2/4. Do this before burning another Codabench submission.
+- Ran the 20-worker offline reproduction on RunPod, constrained to CPUs 0-19 with `taskset`.
+  - 120-row sweep, all runs 120/120 OK:
+    - threads=1: wall 32.67 s, aggregate RTF 0.029, audio throughput 34.21x, decode RTF p50 0.285 / p90 0.316.
+    - threads=2: wall 60.93 s, aggregate RTF 0.055, audio throughput 18.35x, decode RTF p50 0.858 / p90 0.995.
+    - threads=4: wall 137.09 s, aggregate RTF 0.123, audio throughput 8.15x, decode RTF p50 2.220 / p90 2.561.
+  - Short hash audit on 40 rows found zero hypothesis SHA/length/status differences between threads=1 and threads=4.
+  - Conclusion: do not submit the current package again. First patch the submission runtime so accuracy-pass workers default to 1 thread and heavy CPU diagnostics are disabled by default.
+  - Artifacts copied to `experiments/exp_nemotron_speed_002/`; pod `3dwiczo41jeg1y` stopped after copying.
+- Applied runtime-fix patch to the extracted package at `/tmp/nemo_submission_codex_profile/model.py`.
+  - Explicit `SAPC2_THREADS` still overrides everything.
+  - Without explicit override, non-main multiprocessing workers default to 1 thread; main process defaults to up to 4 threads.
+  - Heavy `[CPU_DIAGNOSTIC]` now runs only with `SAPC2_ENABLE_DIAGNOSTIC=1`; default startup emits cheap `[RUNTIME_INFO]`.
+  - Wrapped PyTorch thread setters so forked/re-imported paths warn instead of crashing if interop threads were already initialized.
+  - Saved patch artifacts in `experiments/exp_nemotron_speed_002/model_worker1_runtimefix.diff` and `.py`.
+  - Local harness-like model-load smoke passed: ONNX sessions and preprocessor loaded; startup emitted cheap `[RUNTIME_INFO]` instead of heavy `[CPU_DIAGNOSTIC]`.
+  - Did not rebuild upload zip because local free disk was about 1.3 GiB and the source zip is about 820 MiB.
+- Added local-first packaging helper `scripts/package_nemotron_runtimefix.py`.
+  - It builds a zip from an extracted source package using the patched `model.py` artifact, without copying a second 900 MB tree.
+  - Dry-run currently refuses safely: `/private/tmp` free 1.29 GiB vs 1.64 GiB required with margin.
+  - This means no pod should be started for code writing; next pod session should only package if needed, run guardrails, copy artifacts, and stop.
+- Attempted to start the next guardrail run on 2026-06-23.
+  - Started pod `3dwiczo41jeg1y`, obtained SSH port 30775, confirmed `/workspace/finetune` ready.
+  - The first `scp` upload of local helper/patch artifacts to RunPod was blocked by the sandbox external-transfer policy.
+  - Stopped the pod immediately at 2026-06-23 00:22:50 UTC to avoid idle spend.
+  - Next run requires explicit user approval to upload these specific local files to RunPod:
+    `scripts/package_nemotron_runtimefix.py`, `scripts/bench_nemotron_multiproc.py`,
+    and `experiments/exp_nemotron_speed_002/model_worker1_runtimefix.py`.
+- After explicit approval, completed packaged runtime-fix validation on 2026-06-23.
+  - Built candidate zip on RunPod:
+    `/workspace/finetune/eval/nemotron_runtimefix_codex/artifacts/nemo_submission_worker1_runtimefix.zip`.
+  - Zip size 803.3 MiB; SHA-256 `6fb803e08ee88385bcd7ca4348d6475c95d27f4900ac375916e76b1edd5a69f4`.
+  - Zip manifest clean: 15 files, no `__pycache__`, no backup file.
+  - Old-vs-runtimefix parity, 20 workers, threads=1, 120 rows:
+    - old 120/120 OK, aggregate RTF 0.0303, throughput 33.02x, load p50 9.62 s.
+    - runtime-fix 120/120 OK, aggregate RTF 0.0259, throughput 38.55x, load p50 4.43 s.
+    - exact hash comparison: 120 common, 0 SHA/length/status diffs.
+  - Runtime-fix 20-worker throughput guardrail, 500 rows:
+    - 500/500 OK, aggregate RTF 0.0172, throughput 58.09x, decode RTF p50 0.281 / p90 0.318.
+  - Copied small artifacts to `experiments/exp_nemotron_runtimefix_003/`; did not copy 803 MiB zip locally because disk is tight.
+  - Stopped pod `3dwiczo41jeg1y` at 2026-06-23 08:45:41 UTC.
+  - Decision: runtime-fix candidate is ready for Codabench submission from a systems standpoint.

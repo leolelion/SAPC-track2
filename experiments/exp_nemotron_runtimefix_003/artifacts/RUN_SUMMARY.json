@@ -1,0 +1,58 @@
+{
+  "parity_compare": {
+    "common": 120,
+    "extra_runtimefix": 0,
+    "missing_runtimefix": 0,
+    "old_n": 120,
+    "runtimefix_n": 120,
+    "sha_len_ok_diffs": 0
+  },
+  "parity_old_w20_t1_120": {
+    "aggregate_rtf_wall": 0.030285765651692984,
+    "decode_rtf_p50": 0.2903362176115223,
+    "decode_rtf_p90": 0.339389892283373,
+    "load_p50": 9.616862843278795,
+    "n_empty_text": 20,
+    "n_failed": 0,
+    "n_ok": 120,
+    "threads": 1,
+    "throughput_audio_sec_per_wall_sec": 33.01881192308901,
+    "total_audio_sec": 1117.8536875,
+    "total_wall_sec": 33.85505481250584,
+    "workers": 20
+  },
+  "parity_runtimefix_w20_t1_120": {
+    "aggregate_rtf_wall": 0.025942245831367755,
+    "decode_rtf_p50": 0.28657427855669176,
+    "decode_rtf_p90": 0.31888290684706105,
+    "load_p50": 4.427033518441021,
+    "n_empty_text": 20,
+    "n_failed": 0,
+    "n_ok": 120,
+    "threads": 1,
+    "throughput_audio_sec_per_wall_sec": 38.54716382306662,
+    "total_audio_sec": 1117.8536874999998,
+    "total_wall_sec": 28.999635164625943,
+    "workers": 20
+  },
+  "remote_root": "/workspace/finetune/eval/nemotron_runtimefix_codex",
+  "runtimefix_w20_t1_500": {
+    "aggregate_rtf_wall": 0.017215836164940386,
+    "decode_rtf_p50": 0.28136204490135375,
+    "decode_rtf_p90": 0.3175797210021826,
+    "load_p50": 4.482550787739456,
+    "n_empty_text": 86,
+    "n_failed": 0,
+    "n_ok": 500,
+    "threads": 1,
+    "throughput_audio_sec_per_wall_sec": 58.08605463128621,
+    "total_audio_sec": 4436.302312499997,
+    "total_wall_sec": 76.37465379014611,
+    "workers": 20
+  },
+  "zip_bad_entries": [],
+  "zip_n_files": 15,
+  "zip_path": "/workspace/finetune/eval/nemotron_runtimefix_codex/artifacts/nemo_submission_worker1_runtimefix.zip",
+  "zip_sha256": "6fb803e08ee88385bcd7ca4348d6475c95d27f4900ac375916e76b1edd5a69f4",
+  "zip_size_mb": 803.3
+}

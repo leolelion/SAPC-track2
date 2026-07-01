@@ -1,0 +1,490 @@
+{
+  "audio_sec": 28.5,
+  "compute_time_sec": 3.64236569032073,
+  "decoder_profile": {
+    "node_count": 9637,
+    "node_total_ms": 147.138,
+    "path": "results/e4_onnx_profile_long_threads8_decoder_2026-06-22_20-49-11_158.json",
+    "providers": [
+      {
+        "count": 9637,
+        "ms": 147.138,
+        "provider": "CPUExecutionProvider"
+      }
+    ],
+    "top_nodes": [
+      {
+        "ms": 0.543,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.209,
+        "name": "/joint/joint_net/joint_net.2/MatMul_kernel_time",
+        "op": "MatMul",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.185,
+        "name": "/joint/enc/MatMul/MatmulTransposeFusion/_kernel_time",
+        "op": "FusedMatMul",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.163,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.158,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.158,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.155,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.155,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.155,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.154,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.154,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.154,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.154,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.15,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.145,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.144,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.141,
+        "name": "/joint/pred/MatMul_kernel_time",
+        "op": "MatMul",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.139,
+        "name": "/decoder/dec_rnn/lstm/LSTM_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.136,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.135,
+        "name": "/decoder/dec_rnn/lstm/LSTM_1_kernel_time",
+        "op": "LSTM",
+        "provider": "CPUExecutionProvider"
+      }
+    ],
+    "top_ops": [
+      {
+        "avg_us": 101.31026252983294,
+        "count": 838,
+        "ms": 84.898,
+        "op": "LSTM"
+      },
+      {
+        "avg_us": 22.712410501193318,
+        "count": 838,
+        "ms": 19.033,
+        "op": "MatMul"
+      },
+      {
+        "avg_us": 25.816229116945106,
+        "count": 419,
+        "ms": 10.817,
+        "op": "FusedMatMul"
+      },
+      {
+        "avg_us": 4.511336515513126,
+        "count": 1676,
+        "ms": 7.561,
+        "op": "Add"
+      },
+      {
+        "avg_us": 4.841288782816229,
+        "count": 838,
+        "ms": 4.057,
+        "op": "Concat"
+      },
+      {
+        "avg_us": 4.643198090692124,
+        "count": 838,
+        "ms": 3.891,
+        "op": "Split"
+      },
+      {
+        "avg_us": 4.130071599045346,
+        "count": 838,
+        "ms": 3.461,
+        "op": "Squeeze"
+      },
+      {
+        "avg_us": 3.81145584725537,
+        "count": 838,
+        "ms": 3.194,
+        "op": "Unsqueeze"
+      },
+      {
+        "avg_us": 3.6097852028639617,
+        "count": 838,
+        "ms": 3.025,
+        "op": "Transpose"
+      },
+      {
+        "avg_us": 5.183770883054892,
+        "count": 419,
+        "ms": 2.172,
+        "op": "Identity"
+      },
+      {
+        "avg_us": 5.007159904534606,
+        "count": 419,
+        "ms": 2.098,
+        "op": "Gather"
+      },
+      {
+        "avg_us": 3.5369928400954653,
+        "count": 419,
+        "ms": 1.482,
+        "op": "Relu"
+      },
+      {
+        "avg_us": 3.4582338902147973,
+        "count": 419,
+        "ms": 1.449,
+        "op": "Cast"
+      }
+    ]
+  },
+  "encoder_profile": {
+    "node_count": 144612,
+    "node_total_ms": 2906.569,
+    "path": "results/e4_onnx_profile_long_threads8_encoder_2026-06-22_20-49-08_926.json",
+    "providers": [
+      {
+        "count": 144612,
+        "ms": 2906.569,
+        "provider": "CPUExecutionProvider"
+      }
+    ],
+    "top_nodes": [
+      {
+        "ms": 4.607,
+        "name": "/layers.11/conv/Transpose_2_kernel_time",
+        "op": "Transpose",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 1.947,
+        "name": "/Transpose_5_kernel_time",
+        "op": "Transpose",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 1.369,
+        "name": "/Concat_4_kernel_time",
+        "op": "Concat",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.903,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.87,
+        "name": "/layers.7/conv/depthwise_conv/Conv_kernel_time",
+        "op": "Conv",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.869,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.858,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.84,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.839,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.828,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.821,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.82,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.806,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.806,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.802,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.801,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.799,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.799,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.798,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      },
+      {
+        "ms": 0.796,
+        "name": "/Gather_48/GatherSliceToSplitFusion_kernel_time",
+        "op": "Split",
+        "provider": "CPUExecutionProvider"
+      }
+    ],
+    "top_ops": [
+      {
+        "avg_us": 46.76589640198511,
+        "count": 12896,
+        "ms": 603.093,
+        "op": "Transpose"
+      },
+      {
+        "avg_us": 68.36246684350132,
+        "count": 7540,
+        "ms": 515.453,
+        "op": "DynamicQuantizeMatMul"
+      },
+      {
+        "avg_us": 81.95854145854146,
+        "count": 4004,
+        "ms": 328.162,
+        "op": "Conv"
+      },
+      {
+        "avg_us": 87.5625,
+        "count": 3744,
+        "ms": 327.834,
+        "op": "MatMulIntegerToFloat"
+      },
+      {
+        "avg_us": 24.754647435897436,
+        "count": 6240,
+        "ms": 154.469,
+        "op": "LayerNormalization"
+      },
+      {
+        "avg_us": 13.372796474358974,
+        "count": 9984,
+        "ms": 133.514,
+        "op": "Concat"
+      },
+      {
+        "avg_us": 11.864838286713287,
+        "count": 9152,
+        "ms": 108.587,
+        "op": "Slice"
+      },
+      {
+        "avg_us": 27.618589743589745,
+        "count": 3744,
+        "ms": 103.404,
+        "op": "MatMul"
+      },
+      {
+        "avg_us": 14.185042735042735,
+        "count": 4680,
+        "ms": 66.386,
+        "op": "Where"
+      },
+      {
+        "avg_us": 44.07692307692308,
+        "count": 1352,
+        "ms": 59.592,
+        "op": "Split"
+      },
+      {
+        "avg_us": 3.368609287054409,
+        "count": 17056,
+        "ms": 57.455,
+        "op": "Unsqueeze"
+      },
+      {
+        "avg_us": 15.286858974358974,
+        "count": 3744,
+        "ms": 57.234,
+        "op": "QuickGelu"
+      },
+      {
+        "avg_us": 6.503407984420643,
+        "count": 8216,
+        "ms": 53.432,
+        "op": "Add"
+      },
+      {
+        "avg_us": 15.524886877828054,
+        "count": 2652,
+        "ms": 41.172,
+        "op": "Pad"
+      },
+      {
+        "avg_us": 9.492877492877493,
+        "count": 4212,
+        "ms": 39.984,
+        "op": "Mul"
+      },
+      {
+        "avg_us": 3.500184026499816,
+        "count": 10868,
+        "ms": 38.04,
+        "op": "Gather"
+      },
+      {
+        "avg_us": 3.8189016865487453,
+        "count": 9724,
+        "ms": 37.135,
+        "op": "Reshape"
+      },
+      {
+        "avg_us": 23.523846153846154,
+        "count": 1300,
+        "ms": 30.581,
+        "op": "DynamicQuantizeLinear"
+      },
+      {
+        "avg_us": 27.707264957264957,
+        "count": 936,
+        "ms": 25.934,
+        "op": "Expand"
+      },
+      {
+        "avg_us": 3.182909196067091,
+        "count": 6916,
+        "ms": 22.013,
+        "op": "Shape"
+      }
+    ]
+  },
+  "final_len": 141,
+  "final_preview": "We're hunting and fishing. I did a lot of it when I was a kid. It was always fun and great to be outside. Enjoy this have a good family time.",
+  "row": {
+    "audio_filepath": "processed/Dev/36aa3164-db71-4ee3-b6b1-08dc8d7bb350/36aa3164-db71-4ee3-b6b1-08dc8d7bb350_1078_8623.wav",
+    "duration": "28.5",
+    "duration_bucket": "long",
+    "etiology": "ALS",
+    "id": "36aa3164-db71-4ee3-b6b1-08dc8d7bb350_1078_8623",
+    "norm_text_with_disfluency": "some of my hobbies were hunting and fishing i did a lot of it when i was a kid it was always fun and great to be outside enjoyed it as a good family time",
+    "norm_text_without_disfluency": "some of my hobbies were hunting and fishing i did a lot of it when i was a kid it was always fun and great to be outside enjoyed it as a good family time",
+    "speaker": "36aa3164-db71-4ee3-b6b1-08dc8d7bb350",
+    "text": "[Talk about some of your hobbies.] Some of my hobbies were hunting and fishing. I did a lot of it when I was a kid. It was always fun and great to be outside. Enjoyed it as a good family time."
+  },
+  "rtf_compute": 0.1278023049235344,
+  "rtf_wall": 0.12784381665027977,
+  "wall_sec": 3.6435487745329738
+}

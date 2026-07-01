@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Mac-local: wait for GPU, start pod, inspect NeMo ONNX export I/O, pull log, stop pod. PID-lock guard.
+# Mac-local: run the encoder-only SOS severe/representative CER gate on the RunPod pod.
+set -uo pipefail
+
 ID=3dwiczo41jeg1y
 KEY=/Users/o/.runpod/ssh/RunPod-Key-Go
 O="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=40 -o ServerAliveInterval=20"
 REPO=/Users/o/Downloads/SAPC-template
-RUN_LOG=/Users/o/Downloads/sos_fix_autorun.log
+RUN_LOG=/Users/o/Downloads/encoder_sos_eval_autorun.log
 : > "$RUN_LOG"; exec > >(tee -a "$RUN_LOG") 2>&1
 echo "$$" > /tmp/sapc_autorun.lock
+
 stop_if_owner () {
   if [ "$(cat /tmp/sapc_autorun.lock 2>/dev/null)" = "$$" ]; then
     echo "[autorun] stopping pod ..."
@@ -15,6 +18,7 @@ stop_if_owner () {
     echo "[autorun] newer autorun owns pod -> not stopping"
   fi
 }
+
 try_start_pod () {
   runpodctl pod start "$ID" >/dev/null 2>&1 &
   spid=$!
@@ -27,6 +31,7 @@ try_start_pod () {
   wait "$spid" 2>/dev/null
   return 124
 }
+
 echo "[autorun] $(date) waiting for GPU slot ..."
 for i in $(seq 1 360); do
   echo "[autorun] start attempt $i ..."
@@ -38,6 +43,7 @@ for i in $(seq 1 360); do
   sleep 55
 done
 runpodctl get pod $ID 2>/dev/null | grep -q RUNNING || { echo "[autorun] POD_NEVER_STARTED"; exit 1; }
+
 sleep 20
 PORT=""; HOST=""
 for k in $(seq 1 15); do
@@ -47,17 +53,26 @@ for k in $(seq 1 15); do
   sleep 10
 done
 [ -n "$PORT" ] || { echo "[autorun] NO_PORT"; stop_if_owner; exit 1; }
-if ! scp -P $PORT -i $KEY $O "$REPO/scripts/run_sos_fix.sh" root@$HOST:/workspace/ >/dev/null; then
-  echo "[autorun] UPLOAD_FAILED"
+
+if ! scp -P $PORT -i $KEY $O "$REPO/scripts/run_encoder_sos_eval.sh" root@$HOST:/workspace/ >/dev/null; then
+  echo "[autorun] UPLOAD_RUN_SCRIPT_FAILED"
   stop_if_owner
   exit 1
 fi
-if ! ssh -p $PORT -i $KEY $O root@$HOST 'cd /workspace && bash run_sos_fix.sh'; then
+if ! scp -P $PORT -i $KEY $O "$REPO/scripts/streaming_cer_bootstrap.py" root@$HOST:/workspace/ >/dev/null; then
+  echo "[autorun] UPLOAD_BOOTSTRAP_FAILED"
+  stop_if_owner
+  exit 1
+fi
+if ! ssh -p $PORT -i $KEY $O root@$HOST 'cd /workspace && bash run_encoder_sos_eval.sh'; then
   echo "[autorun] REMOTE_RUN_FAILED"
 fi
-if ! scp -P $PORT -i $KEY $O root@$HOST:/workspace/finetune/nemo_ft/sos_fix.log /Users/o/Downloads/sos_fix.log >/dev/null; then
+if ! scp -P $PORT -i $KEY $O root@$HOST:/workspace/finetune/nemo_ft/encoder_sos_eval.log /Users/o/Downloads/encoder_sos_eval.log >/dev/null; then
   echo "[autorun] LOG_PULL_FAILED"
 fi
-echo "========== INSPECT LOG =========="; cat /Users/o/Downloads/sos_fix.log 2>/dev/null; echo "================================="
+scp -P $PORT -i $KEY $O root@$HOST:/workspace/finetune/nemo_ft/enc_sos_devdiag_cer_bootstrap.json /Users/o/Downloads/enc_sos_devdiag_cer_bootstrap.json >/dev/null 2>&1
+scp -P $PORT -i $KEY $O root@$HOST:/workspace/finetune/nemo_ft/enc_sos_devrep500_cer_bootstrap.json /Users/o/Downloads/enc_sos_devrep500_cer_bootstrap.json >/dev/null 2>&1
+
+echo "========== INSPECT LOG =========="; cat /Users/o/Downloads/encoder_sos_eval.log 2>/dev/null; echo "================================="
 stop_if_owner
 echo "[autorun] DONE $(date)"

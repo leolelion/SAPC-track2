@@ -1,5 +1,9 @@
 # 22 — Deployment results: full-unfrozen is the deploy model (2026-06-26)
 
+**Superseded by `research/23_sos_fix_results.md`:** the later SOS-token test confirmed that the
+encoder-only streaming failure was a harness bug (`_last_token=0` instead of `BLANK_ID=1024`).
+With the SOS fix, encoder-only streams cleanly and is again the deploy model.
+
 Built the [70,1] streaming submission (existing model.py + NeMo export; only CHUNK_NEW 56->16) and ran the REAL
 local_decode.py. KEY: the deployment harness works, and the streaming metric FLIPS the arm choice.
 
