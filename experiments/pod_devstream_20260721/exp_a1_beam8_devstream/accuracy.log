@@ -1,0 +1,14 @@
+Evaluation pipeline: stages 2-2, split=Dev_streaming
+sclite: /workspace/SCTK/bin/sclite
+
+--- Scoring split: Dev_streaming ---
+Loaded 123 predictions
+Manifest has 123 entries
+Matched 123 / 123 predictions
+0it [00:00, ?it/s]123it [00:00, 1468.33it/s]
+0it [00:00, ?it/s]123it [00:00, 24741.00it/s]
+#utts: 123
+WER: 0.1613  (16.13%)
+CER: 0.1162  (11.62%)
+Written to: /workspace/SAPC2/eval/metrics.Dev_streaming.json
+Done.

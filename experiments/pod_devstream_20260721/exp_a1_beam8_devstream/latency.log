@@ -1,0 +1,25 @@
+Evaluation pipeline: stages 3-3, split=Dev
+[3] Computing latency metrics via /workspace/SAPC-template/steps/eval/evaluate_latency.sh
+[latency] Using manifest CSV: /workspace/SAPC2/manifest/Dev_streaming.csv
+{
+  "n_utts_total": 123,
+  "n_utts_with_timing": 123,
+  "n_utts_with_mfa_start": 123,
+  "ttft_definition": "first_non_empty_partial_or_last - (audio_send_start + mfa_speech_start)",
+  "ttlt_definition": "final_visible - audio_end_oracle",
+  "ttft_sec": {
+    "count": 123,
+    "median": 1.1571595668792725,
+    "p50": 1.1571595668792725,
+    "p90": 2.3978826999664307,
+    "p95": 2.746905207633972
+  },
+  "ttlt_sec": {
+    "count": 123,
+    "median": 0.06777381896972656,
+    "p50": 0.06777381896972656,
+    "p90": 0.1015777587890625,
+    "p95": 0.10755441188812255
+  }
+}
+Done.
