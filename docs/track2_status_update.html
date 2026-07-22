@@ -1,0 +1,536 @@
+<title>Track 2 — Status Update</title>
+<style>
+  :root {
+    --paper: #F6F7F9;
+    --panel: #FFFFFF;
+    --ink: #161A21;
+    --ink-soft: #4B535F;
+    --ink-faint: #79828F;
+    --line: #E2E6EC;
+    --line-strong: #CDD3DB;
+    --teal: #0E7A74;
+    --teal-soft: #E4F0EF;
+    --gold: #B7891F;
+    --gold-soft: #F6ECD4;
+    --win: #2E7D51;
+    --win-soft: #E4F1E9;
+    --lost: #A6483C;
+    --lost-soft: #F5E5E2;
+    --shadow: 0 1px 2px rgba(22,26,33,.05), 0 8px 28px rgba(22,26,33,.06);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #12151A;
+      --panel: #191D24;
+      --ink: #EAEDF1;
+      --ink-soft: #AEB6C1;
+      --ink-faint: #7E8896;
+      --line: #262C35;
+      --line-strong: #333B46;
+      --teal: #3FB8AF;
+      --teal-soft: #12312F;
+      --gold: #D6AC55;
+      --gold-soft: #2E2716;
+      --win: #5CC088;
+      --win-soft: #16311F;
+      --lost: #D98A7E;
+      --lost-soft: #331E1A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #F6F7F9; --panel: #FFFFFF; --ink: #161A21; --ink-soft: #4B535F; --ink-faint: #79828F;
+    --line: #E2E6EC; --line-strong: #CDD3DB; --teal: #0E7A74; --teal-soft: #E4F0EF;
+    --gold: #B7891F; --gold-soft: #F6ECD4; --win: #2E7D51; --win-soft: #E4F1E9;
+    --lost: #A6483C; --lost-soft: #F5E5E2; --shadow: 0 1px 2px rgba(22,26,33,.05), 0 8px 28px rgba(22,26,33,.06);
+  }
+  :root[data-theme="dark"] {
+    --paper: #12151A; --panel: #191D24; --ink: #EAEDF1; --ink-soft: #AEB6C1; --ink-faint: #7E8896;
+    --line: #262C35; --line-strong: #333B46; --teal: #3FB8AF; --teal-soft: #12312F;
+    --gold: #D6AC55; --gold-soft: #2E2716; --win: #5CC088; --win-soft: #16311F;
+    --lost: #D98A7E; --lost-soft: #331E1A; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 4vw, 2.5rem) 4rem;
+  }
+
+  /* Header */
+  .masthead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 .5rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.9rem, 5vw, 2.7rem);
+    line-height: 1.08;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .sub { color: var(--ink-soft); font-size: .96rem; margin: .55rem 0 0; }
+  .rank-badge {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .7rem 1rem;
+    background: var(--gold-soft);
+    border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .rank-badge .num {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--gold);
+  }
+  .rank-badge .lbl {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    line-height: 1.3;
+  }
+
+  /* Bottom line */
+  .lede {
+    margin: 1.75rem 0 0;
+    font-size: 1.12rem;
+    line-height: 1.62;
+  }
+  .lede strong { color: var(--ink); }
+  .mark-teal { color: var(--teal); font-weight: 600; }
+
+  /* Stat row */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: .75rem;
+    margin: 1.75rem 0 0;
+  }
+  @media (max-width: 620px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1rem 1.05rem 1.1rem;
+    box-shadow: var(--shadow);
+  }
+  .stat .k {
+    font-family: var(--mono);
+    font-size: .64rem;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 .5rem;
+  }
+  .stat .v {
+    font-family: var(--serif);
+    font-size: 1.9rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+  }
+  .stat .u { font-size: .82rem; color: var(--ink-soft); margin-top: .35rem; }
+  .stat.accent .v { color: var(--teal); }
+  .stat.gold .v { color: var(--gold); }
+
+  /* Sections */
+  section { margin-top: 2.75rem; }
+  h2 {
+    font-family: var(--sans);
+    font-size: .78rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin: 0 0 1rem;
+    padding-bottom: .55rem;
+    border-bottom: 1px solid var(--line);
+  }
+  p { margin: 0 0 1rem; }
+  p:last-child { margin-bottom: 0; }
+
+  /* Table */
+  .table-scroll { overflow-x: auto; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); min-width: 560px; }
+  thead th {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-align: left;
+    padding: .85rem 1rem;
+    border-bottom: 1px solid var(--line-strong);
+    white-space: nowrap;
+  }
+  thead th.num, tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody td { padding: .95rem 1rem; border-bottom: 1px solid var(--line); font-size: .94rem; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td.num { font-family: var(--mono); }
+  .row-name { font-weight: 600; }
+  .row-note { display: block; font-size: .78rem; color: var(--ink-faint); font-weight: 400; margin-top: .15rem; }
+  tr.lead td { background: var(--teal-soft); }
+  tr.lead .row-name { color: var(--teal); }
+
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .04em;
+    padding: .22rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .chip.win { background: var(--win-soft); color: var(--win); }
+  .chip.lost { background: var(--lost-soft); color: var(--lost); }
+  .chip.old { background: var(--line); color: var(--ink-soft); }
+
+  .takeaways { margin: 1.25rem 0 0; padding: 0; list-style: none; display: grid; gap: .7rem; }
+  .takeaways li { position: relative; padding-left: 1.35rem; color: var(--ink-soft); }
+  .takeaways li::before {
+    content: ""; position: absolute; left: 0; top: .62em;
+    width: 6px; height: 6px; border-radius: 2px; background: var(--teal);
+  }
+  .takeaways strong { color: var(--ink); }
+
+  /* Ruled-out cards */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; }
+  @media (max-width: 620px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.1rem 1.15rem;
+    box-shadow: var(--shadow);
+  }
+  .card h3 { margin: 0 0 .5rem; font-family: var(--sans); font-size: .98rem; font-weight: 600; display: flex; align-items: center; gap: .55rem; }
+  .card p { font-size: .88rem; color: var(--ink-soft); margin: 0; }
+
+  /* Next steps */
+  .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: .85rem; }
+  .step {
+    display: flex; gap: .9rem;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1rem 1.1rem; box-shadow: var(--shadow);
+  }
+  .step .dot { flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--teal); margin-top: .55em; }
+  .step .body { flex: 1; }
+  .step .body b { font-size: .96rem; }
+  .step .body span { display: block; font-size: .87rem; color: var(--ink-soft); margin-top: .2rem; }
+
+  /* Numbered build pipeline */
+  .pipe { margin: 0; padding: 0; list-style: none; display: grid; gap: .85rem; }
+  .pipe li {
+    display: flex; gap: 1rem;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1rem 1.15rem; box-shadow: var(--shadow);
+  }
+  .pipe .n {
+    flex: none; width: 30px; height: 30px; border-radius: 8px;
+    background: var(--teal-soft); color: var(--teal);
+    font-family: var(--serif); font-weight: 700; font-size: 1.05rem;
+    display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .pipe .body b { font-size: .97rem; }
+  .pipe .body p { font-size: .89rem; color: var(--ink-soft); margin: .25rem 0 0; }
+
+  /* Challenge context */
+  .context p { color: var(--ink-soft); }
+  .context .rank-line {
+    display: flex; align-items: center; gap: .7rem;
+    margin: 1.15rem 0 0; padding: .85rem 1.1rem;
+    background: var(--teal-soft); border-left: 3px solid var(--teal);
+    border-radius: 0 10px 10px 0;
+    color: var(--ink); font-weight: 600; font-size: 1rem;
+  }
+  .context .rank-line .medal { font-size: 1.15rem; line-height: 1; }
+
+  /* Beam explainer */
+  .beam-head { font-family: var(--sans); font-weight: 600; font-size: 1.02rem; margin: 1.75rem 0 .9rem; }
+  .beam-list { margin: 0; padding: 0; list-style: none; display: grid; gap: .8rem; }
+  .beam-list li { padding-left: 1.1rem; border-left: 2px solid var(--line-strong); color: var(--ink-soft); }
+  .beam-list li b { color: var(--ink); }
+  .beam-list li.free { border-left-color: var(--teal); background: var(--teal-soft); padding: .7rem 1rem; border-radius: 0 8px 8px 0; }
+
+  /* Caveats callout */
+  .callout {
+    background: var(--gold-soft);
+    border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+    border-radius: 12px;
+    padding: 1.15rem 1.3rem;
+  }
+  .callout h2 { border: none; color: var(--gold); margin-bottom: .7rem; padding: 0; }
+  .callout ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .5rem; }
+  .callout li { color: var(--ink-soft); font-size: .92rem; }
+  .callout strong { color: var(--ink); }
+
+  footer {
+    margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: .74rem; line-height: 1.7; color: var(--ink-faint);
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">SAPC2 · Track 2 · Streaming ASR</p>
+      <h1>Streaming recognition for impaired speech</h1>
+      <p class="sub">Status update for management — 21 July 2026</p>
+    </div>
+    <div class="rank-badge" role="img" aria-label="Ranked number one on the public leaderboard">
+      <span class="num">#1</span>
+      <span class="lbl">Public<br>leaderboard</span>
+    </div>
+  </header>
+
+  <p class="lede">
+    Our live competition entry is <strong>ranked #1 on the public leaderboard</strong> — accurate, low-latency,
+    and CPU-efficient. It <span class="mark-teal">outperformed a model 10× its size</span>, validating our
+    strategy of fine-tuning a right-sized model on impaired-speech data rather than chasing raw scale.
+    The next round of low-cost improvements is prepared and waiting on a single compute run.
+  </p>
+
+  <div class="stats">
+    <div class="stat gold">
+      <p class="k">Leaderboard</p>
+      <div class="v">#1</div>
+      <div class="u">public ranking</div>
+    </div>
+    <div class="stat accent">
+      <p class="k">Accuracy (CER)</p>
+      <div class="v">21.28<span style="font-size:1rem">%</span></div>
+      <div class="u">primary metric · lower is better</div>
+    </div>
+    <div class="stat">
+      <p class="k">First word</p>
+      <div class="v">1.37<span style="font-size:1rem">s</span></div>
+      <div class="u">time to first partial</div>
+    </div>
+    <div class="stat">
+      <p class="k">Latency score</p>
+      <div class="v">0.73<span style="font-size:1rem">s</span></div>
+      <div class="u">mean of first-word + final</div>
+    </div>
+  </div>
+
+  <section class="context">
+    <h2>About the challenge</h2>
+    <p>The <strong>Speech Accessibility Project Challenge 2 (SAPC2)</strong> is a public benchmark competition to improve automatic speech recognition for people with <strong>speech disabilities</strong> — dysarthric speech arising from conditions such as ALS, cerebral palsy, Parkinson's, Down syndrome, and stroke. Mainstream speech recognition performs poorly on this population, and the challenge exists to close that gap.</p>
+    <p>We compete in <strong>Track 2 — streaming (real-time) recognition</strong>: transcribe speech <em>as it is spoken</em>, running on <strong>CPU only</strong> within a fixed compute budget. Entries are scored on the trade-off between <strong>accuracy</strong> (character error rate) and <strong>latency</strong> (how quickly words appear); the prize is shared among all teams that land on the best accuracy–latency frontier.</p>
+    <p class="rank-line"><span class="medal">🥇</span> Our entry is currently ranked <span class="mark-teal">#1 on the public leaderboard</span> for this track.</p>
+  </section>
+
+  <section>
+    <h2>Results that matter — official scoring</h2>
+    <p>Measured on the sequestered <strong>Test1</strong> set through the organizers' exact scoring pipeline. The competition ranks on the accuracy&nbsp;×&nbsp;latency frontier; our entry leads on both.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Submission</th>
+            <th class="num">CER ↓</th>
+            <th class="num">WER ↓</th>
+            <th class="num">First word</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="lead">
+            <td>
+              <span class="row-name">Zipformer · beam-4</span>
+              <span class="row-note">our live #1 entry</span>
+            </td>
+            <td class="num">21.28%</td>
+            <td class="num">29.5%</td>
+            <td class="num">1.37 s</td>
+            <td><span class="chip win">Leads both axes</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="row-name">Zipformer · greedy</span>
+              <span class="row-note">our earlier version</span>
+            </td>
+            <td class="num">23.44%</td>
+            <td class="num">31.51%</td>
+            <td class="num">1.44 s</td>
+            <td><span class="chip old">Superseded</span></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="row-name">Nemotron 0.6B</span>
+              <span class="row-note">~10× larger model</span>
+            </td>
+            <td class="num">27.97%</td>
+            <td class="num">37.71%</td>
+            <td class="num">2.28 s</td>
+            <td><span class="chip lost">Lost</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="takeaways">
+      <li>Our #1 entry <strong>strictly beats</strong> our earlier version on <em>both</em> accuracy and speed — a clean upgrade at zero retraining cost.</li>
+      <li>A model with <strong>~10× more parameters lost to it</strong>. We proved this rigorously and redirected effort off the dead end.</li>
+      <li>The remaining challenge is the <strong>most severely impaired speakers</strong>, where every model still struggles — the accuracy floor we're working to raise.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How it works — our approach</h2>
+    <p>A three-step build on an open, streaming-capable model.</p>
+    <ol class="pipe">
+      <li>
+        <span class="n">1</span>
+        <span class="body"><b>Start from a pretrained streaming Zipformer</b>
+          <p>A ~66-million-parameter recognizer, originally trained on read English audiobooks (LibriSpeech). "Streaming" means it transcribes <em>as audio arrives</em>, in ~0.3-second chunks, rather than waiting for the whole utterance — exactly what the contest scores.</p></span>
+      </li>
+      <li>
+        <span class="n">2</span>
+        <span class="body"><b>Fine-tune it on impaired speech</b>
+          <p>16 training passes over the challenge's dysarthric-speech data, with speed-perturbation and SpecAugment (showing the model slightly sped-up/slowed and partially-masked audio so it generalizes). This is where most of the accuracy comes from — the model learns the acoustics of impaired speech.</p></span>
+      </li>
+      <li>
+        <span class="n">3</span>
+        <span class="body"><b>Compress and decode efficiently</b>
+          <p>Export to an optimized 8-bit (int8) form so it runs fast on CPU within budget — near-lossless, within ~0.1 CER of full precision — and decode with beam search (below).</p></span>
+      </li>
+    </ol>
+
+    <p class="beam-head">How beam search helps here</p>
+    <p style="color:var(--ink-soft);font-size:.92rem;margin-bottom:1rem">When transcribing, the model emits tokens (word-pieces) one at a time.</p>
+    <ul class="beam-list">
+      <li><b>Greedy</b> decoding commits to the single most likely token at each step — fast, but one locally-wrong guess can derail the rest of the transcript.</li>
+      <li><b>Beam search</b> keeps the several most promising partial transcripts alive at once — the "beam width" is how many (we ship 4; beam-8 is now testing better) — and commits only at the end to the best-scoring whole. It recovers from a tempting-but-wrong token by keeping alternatives open, which matters most when the audio is ambiguous — as impaired speech often is. That's why beam-4 beat greedy by <b>~2 CER points</b> on the real test set.</li>
+      <li class="free"><b>Why it's nearly free:</b> the expensive part — the encoder, ~95% of the computation — runs <em>once</em> and is shared across all candidate transcripts. So widening the beam from 4 to 8 barely changes latency: more accuracy at almost no speed cost, which is exactly what the dev-set result below shows.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Improvements already measured — internal dev set</h2>
+    <p>Two upgrades to our winning model are <strong>implemented and measured</strong> through the organizers' exact scoring on our internal streaming dev set. This set is easier than the real test set, so read the numbers as a <strong>relative comparison</strong> — the <em>gaps between settings</em> are what's load-bearing.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Setting <span style="font-weight:400;text-transform:none;letter-spacing:0">(dev set)</span></th>
+            <th class="num">CER ↓</th>
+            <th class="num">First word</th>
+            <th>vs. live entry</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="row-name">beam-4</span><span class="row-note">current live entry</span></td>
+            <td class="num">12.14%</td>
+            <td class="num">1.16 s</td>
+            <td><span class="chip old">reference</span></td>
+          </tr>
+          <tr class="lead">
+            <td><span class="row-name">beam-8</span><span class="row-note">implemented</span></td>
+            <td class="num">11.62%</td>
+            <td class="num">1.16 s</td>
+            <td><span class="chip win">−0.52 CER, same latency</span></td>
+          </tr>
+          <tr>
+            <td><span class="row-name">chunk-8</span><span class="row-note">latency sweep</span></td>
+            <td class="num">13.85%</td>
+            <td class="num">0.93 s</td>
+            <td><span class="chip old">−20% first word, +1.71 CER</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="takeaways">
+      <li><strong>beam-8 is a free accuracy win</strong> — better error rate at the same speed and cost (a one-line runtime change on the shipped model). Our recommended next submission, pending one confirmation run on the real test set.</li>
+      <li><strong>The latency sweep found a distinct low-latency option (chunk-8)</strong> — ~20% faster to first word for a small accuracy cost. Since the prize splits across everyone on the frontier, this could be a valuable <em>second</em> entry at the fast end.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Why the 10× model (Nemotron) failed — and why that's useful</h2>
+    <p>Bigger did not win, and we understand why. On our internal dev sets the larger model looked competitive — but that lead came almost entirely from <strong>easy and moderate speech</strong>, and it evaporated on the two things the contest actually rewards:</p>
+    <div class="cards">
+      <div class="card">
+        <h3><span class="chip lost">Failure 1</span> Severe speech</h3>
+        <p>On the most severely impaired speakers — the hardest cases, and heavily represented in the real test set — the big model was no better than ours. On very quiet, low-energy speech (e.g. ALS) it often <strong>output nothing at all</strong>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="chip lost">Failure 2</span> Real-time streaming</h3>
+        <p>The contest scores incremental, low-latency transcription. The large model was strong seeing a whole utterance at once, but <strong>lost ~10 points of accuracy</strong> when converted to the streaming mode being scored.</p>
+      </div>
+    </div>
+    <ul class="takeaways">
+      <li><strong>The tell:</strong> from dev to the real test set it dropped <strong>~18 points of accuracy — versus ~2 points for our winning model.</strong> A generalization failure, not a scale advantage. Every rescue attempt (further fine-tuning, augmentation, adapters, decode-time fixes) failed our validation bar.</li>
+      <li><strong>Why it's useful:</strong> it confirmed our strategy — adapt a right-sized, streaming-native model to impaired speech rather than scale a general-purpose one. Closed out with evidence, effort redirected.</li>
+      <li><strong>Also ruled out — Parakeet (NVIDIA off-the-shelf):</strong> benchmarked; don't beat our model on accuracy or latency and aren't built for streaming. Not adopted.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What's next</h2>
+    <p>All code and validation are prepared locally; the remaining cost is <strong>one short compute run</strong>.</p>
+    <ul class="steps">
+      <li class="step">
+        <span class="dot"></span>
+        <span class="body"><b>Confirm beam-8 on the real test set</b><span>Then flip it to our live entry — near-zero risk given the clean dev-set win.</span></span>
+      </li>
+      <li class="step">
+        <span class="dot"></span>
+        <span class="body"><b>Language-model fusion</b><span>Add a small language model to sharpen transcripts. Staged locally, not yet run.</span></span>
+      </li>
+      <li class="step">
+        <span class="dot"></span>
+        <span class="body"><b>Combine the two wins</b><span>beam-8 at the faster chunk-8 setting; check the low-latency option on the severe tail before any second submission.</span></span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="callout">
+    <h2>Honest caveats</h2>
+    <ul>
+      <li>The <strong>beam-8 and chunk-8 results are on our internal dev set</strong>, not the official test set. Dev-set wins don't always transfer, so we confirm on the real harness before flipping our live entry.</li>
+      <li><strong>Severely impaired speech remains the hardest case</strong> across every model we've tried; it is our main accuracy limitation.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Source of record: RESEARCH_SUMMARY_FOR_FABLE.md and experiments/summary.csv in the Track 2 repository.<br>
+    All figures from the organizers' official scoring (evaluate.sh), except beam-8 / language-model items, flagged as internal dev-set only.
+  </footer>
+</div>

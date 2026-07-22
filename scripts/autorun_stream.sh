@@ -21,9 +21,10 @@ for k in $(seq 1 15); do
   sleep 10
 done
 [ -n "$PORT" ] || { echo "[autorun] NO_PORT -> stopping pod"; runpodctl pod stop $ID >/dev/null 2>&1; exit 1; }
-scp -P $PORT -i $KEY $O "$REPO/scripts/run_stream_infer.sh" root@$HOST:/workspace/ >/dev/null 2>&1
+scp -P $PORT -i $KEY $O "$REPO/scripts/run_stream_infer.sh" "$REPO/scripts/nemo_eval_diag.py" root@$HOST:/workspace/ >/dev/null 2>&1
 ssh -p $PORT -i $KEY $O root@$HOST 'cd /workspace && bash run_stream_infer.sh' 2>/dev/null
 scp -P $PORT -i $KEY $O root@$HOST:/workspace/finetune/nemo_ft/stream_infer.log /Users/o/Downloads/stream_infer.log 2>/dev/null
+scp -P $PORT -i $KEY $O "root@$HOST:/workspace/finetune/nemo_ft/stream_*.json" /Users/o/Downloads/ 2>/dev/null
 echo "========== INSPECT LOG =========="; cat /Users/o/Downloads/stream_infer.log 2>/dev/null; echo "================================="
 if [ "$(cat /tmp/sapc_autorun.lock 2>/dev/null)" = "$$" ]; then
   echo "[autorun] stopping pod ..."; runpodctl pod stop $ID 2>&1 | grep -i desiredStatus
