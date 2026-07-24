@@ -1,0 +1,32 @@
+# =====================================================================
+#  FastConformer-medium (32M) streaming — Configuration
+#
+#  Cache-aware streaming FastConformer-Hybrid, ~32M params, 80 ms lookahead.
+#  This is the LOW-LATENCY Pareto-corner candidate (research/46). We decode
+#  the RNN-T (Transducer) head of the hybrid checkpoint.
+#
+#  Edit values here; do not edit model.py.
+# =====================================================================
+
+# --- Audio Input ---
+audio:
+  sample_rate: 16000              # 16 kHz mono (harness delivers 1600-sample / 100 ms chunks)
+
+# --- Model Checkpoint (downloaded by setup.sh into weights/) ---
+weights:
+  # NGC/HF name. setup.sh fetches the .nemo so __init__ loads from LOCAL path
+  # (no reliance on internet during the timed run).
+  model_name: stt_en_fastconformer_hybrid_medium_streaming_80ms
+  nemo_file: weights/fastconformer_medium_streaming_80ms.nemo
+
+# --- Streaming operating point ---
+encoder:
+  # att_context_size = [left, right]. right=1 -> 80 ms lookahead (lowest latency
+  # this checkpoint supports). This is the whole point of the fast-model play.
+  # Supported for this ckpt: verify on pod (single-lookahead 80 ms model).
+  att_context_size: [70, 1]
+
+# --- Decoding Strategy ---
+decoding:
+  decoder_type: rnnt              # decode the Transducer head of the hybrid
+  strategy: greedy_batch          # greedy for latency; beam is a later knob

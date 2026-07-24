@@ -1,0 +1,5 @@
+# Auto-installed by the Codabench runtime AFTER setup.sh (CLAUDE.md env reality).
+# NeMo itself is installed in setup.sh (heavier, pinned there). These are the
+# lightweight imports model.py needs at load time.
+omegaconf
+numpy

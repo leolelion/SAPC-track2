@@ -40,6 +40,34 @@ A Track-2 streaming submission on the **CER × latency Pareto frontier**, CPU-on
 - ➡️ **Next gate**: submit the runtime-fix zip to Codabench, then compare Test1 CER/WER/latency against the
   failed Nemotron submission and A1 Zipformer baseline.
 
+## Current State Update (small-model sweep — 2026-07-24)
+**Context:** tested Q's "smaller = faster/better-generalizing model" hypothesis end-to-end on a live H200
+pod (now STOPPED). All zero-shot, Dev_streaming (123u), proxy scorer. Full data: `research/46` §6;
+memory `small-model-sweep-verdict`.
+
+- ✅ **Sweep complete.** Zero-shot CER%: parakeet_realtime_120m@[70,1] **31.8** (best, 80ms) · FC-114M@480ms 33.7
+  · zipformer-70M baseline 36.2 · FC-114M@1040ms 37.3 · FC-114M@default 38.1 · FC-114M@80ms 54.8 ·
+  **zipformer-20M 68.7** · **FC-32M@80ms 72.4** (Dev_diag severe 80.6). Ref FT-zipformer 17.25 proxy / 12.14 official.
+- ✅ **Hypothesis FALSIFIED.** Small models collapse in BOTH families (capacity is the binding constraint on
+  dysarthric speech). No architecture is inherently better; the zipformer's edge is fine-tuning (~19 pts).
+- ✅ **60M FastConformer does not exist** (only 32M medium + 114M large streaming hybrids published).
+- ✅ Built `track2_starting_kit/fastconformer_medium32/` (Codabench-shaped sibling; NeMo streaming call still
+  VERIFY-ON-POD — E1 actually ran via the pod's `stream_infer.py`, not this wrapper).
+- ⚠️ Method scar: sherpa `weights/standard` == `weights/finetuned` by md5 (the 17.25% is FT, not zero-shot;
+  true zero-shot is the `baseline` variant). Parakeet needs `<EOU>` stripping before scoring. Trust checksums, not labels.
+
+### Plan from here (decide next session)
+1. **DEFAULT (safe, no new spend):** ship the fine-tuned zipformer **beam-8** upgrade (Dev_streaming 11.62% vs
+   shipped beam-4 11.62/12.14; Pareto-dominates at equal latency — memory `a1-provenance-and-beam8`). This is
+   the banked win; small-model detour did not beat it.
+2. **OPTIONAL BET (needs explicit Q go + fresh GPU pod):** fine-tune **parakeet_realtime_eou_120m** for a
+   low-latency Pareto corner — only model hinting at a viable 80ms play (31.8% zero-shot → maybe ~14–17% FT).
+   Shelf-ready spec in `research/46` §7. **Binding caveat:** same NeMo-streaming-FT transfer wall that sank
+   Nemotron (research/37 §6, memory `nemotron-vs-zipformer-roadblock`); gate on held-out-severe; Dev win ≠ submit.
+3. **DO NOT** revisit small models or the 32M/20M path — closed on evidence.
+- ➡️ **Next gate:** Q chooses (1) package+submit beam-8, or (2) greenlight the parakeet-FT experiment. All sweep
+  numbers are proxy-scorer (ranking only); any submission still needs official `evaluate.sh` sign-off.
+
 ---
 
 ## Phase 0 — Foundation & contracts  *(DONE)*
