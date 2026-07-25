@@ -1,0 +1,39 @@
+# =====================================================================
+#  parakeet_realtime (120M) cache-aware streaming — Configuration
+#
+#  Low-latency Pareto-corner candidate (research/46 §7, research/47). Zero-shot
+#  this checkpoint led the sweep at 31.8% CER @ 80 ms (Dev_streaming, proxy).
+#  This dir is the *fine-tuned* deploy target; setup.sh fetches the base ckpt,
+#  a FT run (nemo_finetune_v2.py) later drops a fine-tuned .nemo into weights/.
+#
+#  Edit values here; do NOT edit model.py.
+# =====================================================================
+
+audio:
+  sample_rate: 16000              # 16 kHz mono; harness delivers 1600-sample / 100 ms chunks
+
+weights:
+  # >>> VERIFY-ON-POD <<< exact NGC/HF id. The sweep (research/46 §6) used the
+  # EOU variant `parakeet_realtime_eou_120m` (the 31.8% number). Confirm the
+  # resolvable from_pretrained id before the pod run; alt id: parakeet_realtime_120m.
+  # setup.sh saves it to the LOCAL path so the timed run needs no network.
+  model_name: nvidia/parakeet_realtime_eou_120m-v1
+  # After fine-tuning, point this at the FT checkpoint to deploy the tuned model.
+  nemo_file: weights/parakeet_realtime.nemo
+
+encoder:
+  # att_context_size = [left, right]. right=1 -> 80 ms lookahead (the low-latency
+  # reason this model exists). MUST match train=eval=export=deploy (research/19
+  # own-goal: [70,1]-train vs [70,6]-deploy). >>> VERIFY-ON-POD <<< supported set.
+  att_context_size: [70, 1]
+
+decoding:
+  decoder_type: rnnt              # transducer head. >>> VERIFY-ON-POD <<< if ckpt is TDT vs plain RNNT
+  strategy: greedy_batch          # greedy for latency; beam is a later free-CER knob (brief §3.6)
+
+output:
+  # parakeet_realtime emits an end-of-utterance marker; the sweep had to strip it
+  # before scoring (100/123 hyps carried it). Strip standalone special tokens in
+  # model.py's output normalization — NEVER in the scorer (house rule).
+  strip_special_tokens: true
+  special_token_pattern: "<[^>]+>"   # <EOU>, <SOS>, etc. removed from returned text

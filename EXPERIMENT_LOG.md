@@ -157,6 +157,32 @@ Metric columns: **CER** / **WER** (Dev, batch/offline) · **CER_stream** (Dev_st
 - **Next**: submit the runtime-fix zip, then compare Test1 CER/WER/latency against the failed Nemotron submission
   and the A1 Zipformer baseline.
 
+## exp_parakeet_ft — parakeet_realtime_eou_120m dysarthric fine-tune (Arm A + AdaLoRA)
+- **Status**: done (2026-07-25, pod 1ppb7l0i5xuna8). Base = nvidia/parakeet_realtime_eou_120m-v1 (EncDecRNNTBPEModel,
+  cache-aware streaming [70,1]/80ms). Data: full SAP Train 331k utt / 875 spk, speaker-disjoint val 2k/7spk.
+- **Wrapper (part of the model) — 3 bugs found + fixed, verified through the REAL local_decode.py**:
+  1. change_decoding_strategy: NeMo 2.7.3 needs positional decoding_cfg; RNNT streaming crashed step-2
+     (`'dict'.extend` on Hypothesis.timestamp) → fix = greedy_batch + compute_timestamps=False + preserve_alignments=False.
+  2. feature feeding: old wrapper ran preprocessor on raw 100ms chunks → 0 tokens (base AND FT). Rewrote to feed
+     FEATURE frames (ported CacheAwareStreamingAudioBuffer): chunk/shift=[9,16], pre_encode_cache=[0,9], drop_extra=2.
+  3. AdaLoRA CUDA-init crash: get_peft_model split-device → pin_memory fork crash → fix m.to("cpu") + pin_memory=False.
+- **Arm A (encoder-only FT, 4 ep, ckpt-avg)**: val CER 27.5%. **Faithful streaming Dev_streaming CER = 13.18%** /
+  WER 16.94%, empty 5/123. Per-etiology CER: CP 18.99, ALS 14.3, Down 14.52, Stroke 14.78, Parkinson 6.33.
+- **AdaLoRA arm (true adaptive-rank via HF peft, init_r12→target_r4, 0.836M adapters, merged→streaming-safe)**:
+  val CER 31.3%. **Dev_streaming CER = 17.51%** / WER 22.87, empty 5/123 (CP 29.46, Stroke 25.8 — capacity-limited
+  on hard etiologies). Verdict: technique validated + streaming-safe merge, but trails Arm A on measurable CER.
+- **Latency**: local_decode TTFT p50 1711ms was a MEASUREMENT ARTIFACT — pod exposes nproc=128 but 13.6-CPU cgroup
+  quota → torch oversubscribes. Thread-controlled single-process probe: **per-chunk compute 26–34ms median, 0% >100ms
+  (3–4× real-time margin)**; feature-recompute negligible (~1ms/ch), conformer+RNNT step ~22ms/ch. → on a clean
+  24-core host (Codabench) the low-latency corner (80ms lookahead) is REAL; TTFT would be low, not 1711ms.
+- **Metrics**: ArmA CER_stream=13.18% ; AdaLoRA CER_stream=17.51% ; base zero-shot proxy=31.8% ; per-chunk≈26ms.
+- **vs comparators**: ArmA 13.18% ≈ zipformer cs8 13.85% (but cs8 TTFT 926ms vs parakeet 80ms-lookahead) ; beam-8 11.62%.
+- **Conclusion**: Arm A = the arm to keep. CER-competitive with the zipformer AND genuinely low-latency-capable.
+  Promising ship candidate for the low-latency corner. NOT a submission (Q decision; needs clean-host latency + Dev_diag).
+- **Next / gaps**: (1) Dev_diag-425 SEVERE not measured (host thread-thrash) — re-run with OMP_NUM_THREADS capped.
+  (2) confirm TTFT on a dedicated/uncontended host. (3) consider adding torch.set_num_threads() cap to the wrapper
+  __init__ as insurance against oversubscribed eval hosts. Checkpoints persist at /workspace/parakeet_ft/{armA_full,adalora_full}/.
+
 <!-- Template for new entries:
 ## exp_00X — <short title>
 - **Status**: done | running | blocked

@@ -1,0 +1,6 @@
+# Auto-installed by the Codabench runtime AFTER setup.sh.
+# setup.sh already pins nemo_toolkit[asr]==2.7.2; keep this minimal + consistent.
+# >>> VERIFY-ON-POD <<< that these do not conflict with the runtime's torch 2.5.0+cu124.
+nemo_toolkit[asr]==2.7.2
+omegaconf>=2.3
+numpy
