@@ -171,17 +171,35 @@ Metric columns: **CER** / **WER** (Dev, batch/offline) · **CER_stream** (Dev_st
 - **AdaLoRA arm (true adaptive-rank via HF peft, init_r12→target_r4, 0.836M adapters, merged→streaming-safe)**:
   val CER 31.3%. **Dev_streaming CER = 17.51%** / WER 22.87, empty 5/123 (CP 29.46, Stroke 25.8 — capacity-limited
   on hard etiologies). Verdict: technique validated + streaming-safe merge, but trails Arm A on measurable CER.
-- **Latency**: local_decode TTFT p50 1711ms was a MEASUREMENT ARTIFACT — pod exposes nproc=128 but 13.6-CPU cgroup
-  quota → torch oversubscribes. Thread-controlled single-process probe: **per-chunk compute 26–34ms median, 0% >100ms
-  (3–4× real-time margin)**; feature-recompute negligible (~1ms/ch), conformer+RNNT step ~22ms/ch. → on a clean
-  24-core host (Codabench) the low-latency corner (80ms lookahead) is REAL; TTFT would be low, not 1711ms.
-- **Metrics**: ArmA CER_stream=13.18% ; AdaLoRA CER_stream=17.51% ; base zero-shot proxy=31.8% ; per-chunk≈26ms.
-- **vs comparators**: ArmA 13.18% ≈ zipformer cs8 13.85% (but cs8 TTFT 926ms vs parakeet 80ms-lookahead) ; beam-8 11.62%.
-- **Conclusion**: Arm A = the arm to keep. CER-competitive with the zipformer AND genuinely low-latency-capable.
-  Promising ship candidate for the low-latency corner. NOT a submission (Q decision; needs clean-host latency + Dev_diag).
-- **Next / gaps**: (1) Dev_diag-425 SEVERE not measured (host thread-thrash) — re-run with OMP_NUM_THREADS capped.
-  (2) confirm TTFT on a dedicated/uncontended host. (3) consider adding torch.set_num_threads() cap to the wrapper
-  __init__ as insurance against oversubscribed eval hosts. Checkpoints persist at /workspace/parakeet_ft/{armA_full,adalora_full}/.
+- **Latency (RESOLVED 2026-07-26 with capped wrapper)**: the earlier local_decode TTFT p50 1711ms was a
+  MEASUREMENT ARTIFACT — pod exposes nproc=128 but a 13.6-CPU cgroup quota → torch oversubscribed 128 threads.
+  Added a cgroup-aware torch.set_num_threads() cap to the wrapper __init__. Re-ran the REAL local_decode both
+  passes on Dev_streaming: **TTFT p50 = 640ms (p90 2033, p95 2413); TTLT p50 = 74ms (p90 137, p95 249)**;
+  CER unchanged 13.18% (deterministic). Cap alone cut TTFT 1711→640ms (2.7x). Validity: a thread-controlled probe
+  confirmed per-chunk compute stays ~26ms (0% >100ms) even under the host's load-3771, so real-time pacing held
+  (cgroup quota is honored regardless of neighbor load) — this 640ms is a clean number, not contention-inflated.
+- **Metrics**: ArmA CER_stream=13.18% TTFT_p50=640ms TTLT_p50=74ms ; AdaLoRA CER_stream=17.51% (same latency,
+  identical arch/merged weights) ; base zero-shot proxy=31.8% ; per-chunk compute≈26ms.
+- **vs comparators (Arm A PARETO-DOMINATES cs8)**: ArmA 13.18%/640ms beats zipformer cs8 13.85%/926ms on BOTH
+  CER and TTFT. beam-8 11.62%/1157ms wins CER by 1.6pt but at ~1.8x the TTFT → ArmA opens a non-dominated
+  low-latency corner. TTLT 74ms is excellent (fast finalization after audio end).
+- **Dev_diag-425 SEVERE (Arm A, 2026-07-26)**: CER **29.96%** / WER 37.81%, **empty 48/425 (11.3%)**.
+  Per-etiology CER: ALS 41.26, Down 40.53, CP 29.47, Stroke 26.62, Parkinson 6.41. → realizes plan risk#2
+  (severe-tail collapse + confident empties). WORSE than our int8 zipformer's severe ~24.85%, and Test1 is
+  severe-heavy → this is the Test-predictive axis. The frozen joint (Arm A) caps the empty rate, consistent
+  with the 48 empties.
+- **Conclusion (MIXED, not a clean ship)**: Arm A opens a real low-latency corner on general Dev
+  (13.18% @ TTFT 640ms, Pareto-dominates cs8) BUT loses the severe tail (29.96%, 11.3% empties) to the
+  zipformer (~24.85%) — and Test1 is severe-heavy, so Dev_streaming's 13.18% likely does NOT project to Test.
+  AdaLoRA strictly dominated → shelved. NOT a submission.
+- **Next / gaps (ranked)**:
+  1. **Arm B — low-LR joint/pred-net unfreeze** (nemo_finetune_v2.py --freeze joint_unfreeze): the DESIGNED
+     empty-floor lever, directly attacks the 48 severe empties. The clear next GPU experiment for this line.
+  2. **Fix wrapper O(N²) feature recompute** — accept_chunk re-extracts features over the whole raw buffer each
+     call. Invisible in the real-time streaming pass but makes the untimed ACCURACY pass slow (Dev_diag-425 took
+     ~17min) → a real 15000s/submission time-budget risk on full Test. Cache features incrementally. Do BEFORE any submit.
+  3. Optional CER squeeze: beam search (zipformer greedy→beam ~-3pt), int8 encoder.
+  Checkpoints at /workspace/parakeet_ft/{armA_full,adalora_full}/; wrapper now has cgroup torch-thread cap.
 
 <!-- Template for new entries:
 ## exp_00X — <short title>
