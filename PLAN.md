@@ -70,6 +70,41 @@ memory `small-model-sweep-verdict`.
 
 ---
 
+## Current State Update (parakeet FT — Arm A + AdaLoRA — 2026-07-25/26)
+**Ran option (2) above** on pod `1ppb7l0i5xuna8` (H100, now STOPPED). Full detail: `EXPERIMENT_LOG.md`
+`exp_parakeet_ft`, memory `parakeet-ft-wrapper-streaming`. Base = `nvidia/parakeet_realtime_eou_120m-v1`.
+
+**Results (faithful `local_decode` harness, real scorer):**
+| Model | Dev_streaming CER | TTFT p50 | TTLT p50 | Dev_diag SEVERE CER | severe empties |
+|---|---|---|---|---|---|
+| **parakeet Arm A** (encoder-only FT) | **13.18%** | **640 ms** | **74 ms** | **29.96%** | **48/425 (11.3%)** |
+| parakeet AdaLoRA (merged) | 17.51% | 640 ms | 74 ms | — | — |
+| zipformer cs8 | 13.85% | 926 ms | — | — | — |
+| zipformer beam-8 | 11.62% | 1157 ms | — | — | — |
+| int8 zipformer | — | — | — | ~24.85% | — |
+
+- ✅ **Low-latency corner is REAL:** Arm A Pareto-DOMINATES cs8 (better CER *and* TTFT). The earlier scary
+  TTFT (1711ms) was a torch-thread oversubscription artifact (pod nproc=128 vs 13.6-CPU cgroup quota);
+  wrapper now caps threads to the quota (committed) → clean 640ms. Confirmed real-time (26ms/chunk).
+- ⚠️ **VERDICT MIXED, not a clean ship:** severe tail 29.96% w/ **11.3% empties** loses to zipformer (~24.85%),
+  and **Test1 is severe-heavy** → Dev_streaming's 13.18% likely won't project to Test. Plan risk#2 realized
+  (frozen joint → confident empties). AdaLoRA strictly dominated (same latency, worse CER) → **shelved**.
+
+### Plan from here (parakeet line — decide next session)
+1. **Arm B — joint/pred-net unfreeze** (`scripts/nemo_finetune_v2.py --freeze joint_unfreeze`): the DESIGNED
+   empty-floor lever, aims directly at the 48 severe empties. **The decisive next experiment**: does it cut
+   severe empties enough to beat the zipformer's ~24.85% severe while keeping the 640ms latency win? ~2.5h GPU.
+2. **BEFORE any submit — fix wrapper O(N²) feature recompute** (`model.py accept_chunk` re-extracts the whole
+   raw buffer each call). Invisible in the real-time streaming pass, but made the untimed ACCURACY pass take
+   ~17min on 425 utts → a real 15000s/submission time-budget risk on full Test. Cache features incrementally.
+3. Optional CER squeeze if Arm B clears severe: beam search (~-3pt historically, ~free latency), int8 encoder.
+4. **Fallback if Arm B fails severe:** default remains ship the gated beam-8/beam-4 zipformer; parakeet line closes.
+- ➡️ **Assets on pod `/workspace/parakeet_ft/`:** `armA_full/ft_smoke_encoder_only.nemo` (KEEP — ship-candidate
+  + base for Arm B compare/beam/int8), `adalora_full/ft_adalora.nemo` (disposable), `gate.sh`, `ttft_probe.py`,
+  gate outputs. Code committed: `b921f9f`, `7d28427` (main, unpushed).
+
+---
+
 ## Phase 0 — Foundation & contracts  *(DONE)*
 Goal: understand and lock the evaluation pipeline so nothing downstream breaks it.
 - [x] Map repo, read interface + accuracy + latency + manifest code.
