@@ -201,6 +201,43 @@ Metric columns: **CER** / **WER** (Dev, batch/offline) · **CER_stream** (Dev_st
   3. Optional CER squeeze: beam search (zipformer greedy→beam ~-3pt), int8 encoder.
   Checkpoints at /workspace/parakeet_ft/{armA_full,adalora_full}/; wrapper now has cgroup torch-thread cap.
 
+## exp_parakeet_ft_empties — root-cause of the 48 severe empties (NO GPU, CPU diagnostics)
+- **Status**: done (2026-07-26, pod 1ppb7l0i5xuna8, since STOPPED). Motivation: Q asked *why* Arm B (joint-unfreeze)
+  would fix the empties before spending ~2.5h GPU. Battery = 6 committed scripts (git 41f6431/90e9077/1da125d):
+  parakeet_empty_probe, parakeet_offline_recovery, gain_norm_recovery, speaker_audio_probe, compare_empties_vs_model,
+  run_parakeet_error_analysis.sh. Artifacts: experiments/exp_parakeet_ft_empties/*.json; Arm A .nemo exported off-pod
+  to ~/Downloads/SAPC-artifacts/parakeet_armA/ (md5 f2cc2cc7be1c5e355f6ef3e536137b86).
+- **Reproduced**: Dev_diag 425 utt, 48 empty (11.29%), CER 29.93% (≈logged 29.96%). Empties cost ~8.9 CER pts
+  (29.93→21.00 if empties were merely average). Empties concentrated: ALS 27/110 (24.5%), CP 16/152 (10.5%), Down 5/67.
+- **Theory tests (5 competing hypotheses)**:
+  - **T3 streaming/chunking gap — FALSIFIED**: offline single-forward (same [70,1]) recovers only 10/48 (20.8%).
+    The model blanks even with full-utterance context → not the H7 streaming path.
+  - **T5 EOU misfire — FALSIFIED**: 0 eou-only.
+  - **T1 blank-propensity — SUPPORTED**: non-empty errors are deletion-heavy, del:sub = 2.22 (del 9.83% / sub 4.43%).
+  - **T2/C energy — PARTIAL**: the empty-dominated speaker `55c1784a` (22/28 empty, ~½ of all empties) sits ~10dB
+    below the corpus (RMS −35 vs −25 dBFS), no clipping/DC; BUT within that speaker energy does NOT separate empty
+    vs non-empty. This model is `normalize='NA'` → absolute level reaches the encoder → quiet speaker is OOD → blank.
+  - **T4 data-bound — REJECTED for the bulk** (see cross-model below).
+- **Free gain-norm test**: RMS-normalize empties to −25 dBFS (peak-safe) + offline transcribe → 20.8%→29.2%
+  recovered (+4 utts, the very-quiet ones needing +8..+25dB). The +39/+42dB "recoveries" are likely noise
+  hallucination. Verdict: partial free win, NOT a clean fix; 34/48 stay empty even at correct level.
+- **DECISIVE cross-model check** (`compare_empties_vs_model.py` vs fine-tuned zipformer-beam4 diag decode): on the
+  SAME 48 utts (each = 100% CER for parakeet), **zipformer is non-empty 28/48 (58%), CER<0.5 on 15/48 (31%), 9
+  PERFECT (alexa/dog/period/football/hey siri…), mean CER 66%**. → the empties are **PARAKEET-SPECIFIC**
+  (blank-propensity + normalize='NA' level sensitivity), **NOT data-bound**: a normalizing, different-blank model
+  recovers a third cleanly. This IS the mechanism of parakeet's severe-tail loss (29.96% vs zipformer ~24.85%).
+- **CORRECTION to prior turn**: I had called the empties "data-bound, Arm B won't help." The zipformer cross-check
+  falsified that — they're model-specific and recoverable in principle, which RE-GROUNDS the Arm B (blank-propensity)
+  rationale in the empties (not just the diffuse deletion-heaviness). Updated per the surprise.
+- **STRATEGIC conclusion**: parakeet's severe-tail loss is a self-inflicted, parakeet-specific pathology the banked
+  zipformer never had. Parakeet's only edge is latency (640 vs 926ms). To beat zipformer on the severe/Test-heavy
+  tail, parakeet needs BOTH input-normalization AND a joint-unfreeze (Arm B) that survives Dev→Test — two bets vs a
+  model already ahead for free. **EV favors banking the zipformer for the Test-predictive tail; parakeet = a
+  latency-only play** unless Q judges the low-latency corner worth the two-fix gamble.
+- **Next (no GPU committed)**: (a) if pursuing parakeet — add a CAPPED input RMS-norm (+15-20dB cap + energy floor
+  to avoid noise hallucination) to the wrapper and validate through the REAL streaming harness (offline≠streaming
+  here), THEN decide Arm B on Dev→Test; (b) else bank the gated beam-8/beam-4 zipformer and close the parakeet line.
+
 <!-- Template for new entries:
 ## exp_00X — <short title>
 - **Status**: done | running | blocked

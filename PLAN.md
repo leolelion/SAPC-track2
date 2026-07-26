@@ -91,21 +91,22 @@ memory `small-model-sweep-verdict`.
   (frozen joint → confident empties). AdaLoRA strictly dominated (same latency, worse CER) → **shelved**.
 
 ### Plan from here (parakeet line — decide next session)
-0. **ERROR-ANALYSIS BATTERY FIRST (gates Arm B) — prepped 2026-07-26, `scripts/run_parakeet_error_analysis.sh`.**
-   Q flagged the causal gap: *why* would joint-unfreeze fix the 48 severe empties? Our own Nemotron evidence
-   (memory `v2-finetune-plan`) showed empties were **encoder-energy-sensitive** (recovered with the joint FROZEN
-   via gain alone) and that added capacity regressed Test — so Arm B is not obviously the lever. The battery
-   (minutes, CPU, no training) discriminates: `parakeet_empty_probe.py` (T1 del:sub error-mix / T2 audio RMS+dur /
-   T4 speaker-spread, NeMo-free) + `parakeet_offline_recovery.py` (T3/T5: do the empties come back OFFLINE? loads
-   Arm A `.nemo`, decoding-cfg copied from `model.py`). **Decisive branch:** if offline RECOVERS the empties →
-   it's the streaming/emission gap (H7), Arm B won't help → veto; if offline STILL empty + deletion-heavy → Arm B
-   on-target; if empties are just quieter → free Pass-1 RMS-norm first, no GPU. All three py_compile + argparse +
-   (probe) functional-smoke PASS locally; offline-recovery is VERIFY-ON-POD. **Run this in the first ~15 min of the
-   next pod resume, AFTER scp-ing Arm A's `.nemo` off-pod (reclaim risk), BEFORE committing Arm B GPU.**
-1. **Arm B — joint/pred-net unfreeze** (`scripts/nemo_finetune_v2.py --freeze joint_unfreeze`): the DESIGNED
-   empty-floor lever, aims directly at the 48 severe empties. **Runs only if step 0's offline-recovery says the
-   empties are true blanks (not a streaming-path artifact).** Decisive question: does it cut severe empties enough
-   to beat the zipformer's ~24.85% severe while keeping the 640ms latency win? ~2.5h GPU.
+0. **ERROR-ANALYSIS BATTERY — DONE 2026-07-26 (EXPERIMENT_LOG `exp_parakeet_ft_empties`; pod STOPPED).** Ran the
+   full 5-theory battery on the 48 severe empties. Verdict: empties are **PARAKEET-SPECIFIC, not data-bound** — on
+   the SAME 48 utts the fine-tuned **zipformer transcribes 28/48 (58%), 31% at CER<0.5, 9 PERFECT, mean CER 66%
+   vs parakeet's 100%**. Ruled out streaming-gap (offline recovers only 21%) and EOU misfire (0). Cause = parakeet
+   blank-propensity + `normalize='NA'` level sensitivity (the empty-dominated speaker sits ~10dB low). Free
+   gain-norm is only a partial fix (21%→29% offline). **This is the mechanism of parakeet's severe-tail loss.**
+1. **STRATEGIC CALL (supersedes "Arm B is next"):** parakeet's severe-tail loss is a self-inflicted pathology the
+   banked zipformer never had; parakeet's only edge is latency (640 vs 926ms). To beat the zipformer on the
+   severe/Test-heavy tail it needs BOTH input-normalization AND a joint-unfreeze (Arm B) surviving Dev→Test — two
+   bets vs a model already ahead for free. **EV favors banking the zipformer** for the Test-predictive tail;
+   parakeet is a latency-only play unless Q judges the low-latency corner worth the two-fix gamble.
+2. **IF pursuing parakeet:** first add a **capped** input RMS-norm (+15-20dB cap + energy floor, to avoid the
+   noise-hallucination failure mode seen at +39/+42dB) to the wrapper, validate through the REAL streaming harness
+   (offline≠streaming here), THEN decide **Arm B — joint/pred-net unfreeze** (`nemo_finetune_v2.py --freeze
+   joint_unfreeze`) on a hard Dev→Test gate. Arm B is now re-motivated by the blank-propensity finding, but the
+   Nemotron scar (added joint capacity → Test regression) still binds. ~2.5h GPU.
 2. **BEFORE any submit — fix wrapper O(N²) feature recompute** (`model.py accept_chunk` re-extracts the whole
    raw buffer each call). Invisible in the real-time streaming pass, but made the untimed ACCURACY pass take
    ~17min on 425 utts → a real 15000s/submission time-budget risk on full Test. Cache features incrementally.
