@@ -46,8 +46,8 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
 | **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **running** (rung l0 from 2026-07-28 21:26Z) | val CER + val empty count |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |
-| D2 | Arm B + kNN-VC subset | D0 pass, D1 pass, **+ Train-provenance filter (D0 leak finding)** | ~3 h GPU | blocked | severe CER, empty count |
-| D3 | Arm B + F5-TTS subset | D0 pass, D1 pass, **+ locate F5 slot→text off-pod**, + provenance filter | ~3 h GPU | blocked | severe CER, empty count |
+| D2 | Arm B + kNN-VC subset | D0 pass, D1 pass, **+ Train-provenance filter (D0 leak finding)** | ~3 h GPU | blocked on D1 only — **code ready**: `scripts/run_d2_knnvc.sh` (filter → cap → train → post) | severe CER, empty count |
+| D3 | Arm B + F5-TTS subset | D0 pass, D1 pass, **+ locate F5 slot→text off-pod**, + provenance filter | ~3 h GPU | blocked — F5 text **not in this repo either** (searched 2026-07-29); no coverage claim is measurable | severe CER, empty count |
 | D4 | Sequential synth → real re-anneal | D2 or D3 partial | ~4 h GPU | blocked | severe CER vs best of D2/D3 |
 | D5 | TORGO + UASpeech targeted | D1 pass + license | ~3 h GPU | blocked | severe CER, empty count |
 | ~~D7~~ | F5 + kNN-VC mixed | — | — | **killed** | known EOS collapse; mechanism = our primary failure mode |
@@ -118,6 +118,13 @@ kNN-VC 18,797 wavs / 41 Dev speakers, F5 11,931 wavs / 88 Dev-speaker buckets �
 class matching neither split (kNN-VC 40,339 · F5 23,373). Train/Dev speakers are disjoint, so filter
 per file to **Train provenance only** and **exclude `unknown`** before any training use. Without this,
 the Dev gate that authorizes shipping is contaminated by its own training data.
+**How the cap is enforced (2026-07-29).** `nemo_finetune_v2.py` takes a single `--train-json`, and
+`train_ds` shuffles, so the synthetic share of *steps* equals its share of *utterances* — not of hours.
+`scripts/build_d2_mixed_manifest.py` therefore caps on utterance count and **hard-exits** if the cap is
+exceeded, while separately reporting the duration share. Those two numbers diverge: kNN-VC's 5.44 s
+median against SAP's shorter utterances means a 25% step share is ~33% duration share. Read both before
+attributing any D2 delta to the data.
+
 **Falsifier.** Arm B + synth beats Arm B alone on the 48-empty slice *and* does not raise non-empty CER.
 **Kill.** Non-empty CER degrades more than the empty slice improves → distribution drift dominates.
 
