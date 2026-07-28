@@ -105,6 +105,30 @@ class Model:
         self._strip_special = bool(out_cfg.get("strip_special_tokens", True))
         self._special_re = re.compile(str(out_cfg.get("special_token_pattern", r"<[^>]+>")))
 
+        # Causal frozen-scalar input gain (fixes severe-tail empties; see config.yaml
+        # input_gain + exp_parakeet_ft_empties). Env overrides win over config so the
+        # pod can A/B and sweep without editing code. Precompute the linear target/cap/floor.
+        ig = _CONFIG.get("input_gain", {}) or {}
+        _env = os.environ.get
+        self._gain_on = _env("SAPC2_INPUT_GAIN", "on" if ig.get("enabled", True) else "off").lower() != "off"
+        _tgt_db = float(_env("SAPC2_TARGET_DBFS", ig.get("target_dbfs", -25.0)))
+        _cap_db = float(_env("SAPC2_GAIN_CAP_DB", ig.get("cap_db", 20.0)))
+        _flr_db = float(_env("SAPC2_RMS_FLOOR_DBFS", ig.get("floor_dbfs", -45.0)))
+        self._gain_target_rms = 10.0 ** (_tgt_db / 20.0)   # -25 dBFS -> ~0.0562
+        self._gain_cap = 10.0 ** (_cap_db / 20.0)           # +20 dB   -> 10.0x
+        self._gain_rms_floor = 10.0 ** (_flr_db / 20.0)     # -45 dBFS -> ~0.0056
+        self._gain_dbg = (_tgt_db, _cap_db, _flr_db)
+
+        # Incremental feature cache (Fix 2): the OLD path re-ran the mel STFT over the WHOLE
+        # raw buffer every accept_chunk -> O(N^2) over an utterance (invisible in the timed
+        # streaming pass, but blew the untimed accuracy pass to ~17-40 min/425u -> a 15000 s
+        # budget risk on full Test). With the input gain frozen per file, scaled audio is
+        # deterministic, so already-computed frames are STABLE and can be cached; only the
+        # growing tail (last few frames touch the STFT boundary) is recomputed, with left
+        # context, each call. Numerically-gated on-pod (equiv vs full extraction) before trust.
+        # Env-toggle for A/B + fallback: SAPC2_FEAT_CACHE=on(default)|off.
+        self._feat_cache_on = _env("SAPC2_FEAT_CACHE", "on").lower() != "off"
+
         nemo_path = _DIR / _CONFIG.weights.nemo_file
         print(f"[parakeet_ft] loading {nemo_path} (CPU) …")
         if nemo_path.exists():
@@ -170,7 +194,9 @@ class Model:
         print(
             f"[parakeet_ft] ready (att={att}, chunk={self._chunk_pair} shift={self._shift_pair} "
             f"pre_cache={self._pre_cache_pair} drop_extra={self._drop_extra} "
-            f"norm={self._norm_type} strip_special={self._strip_special})"
+            f"norm={self._norm_type} strip_special={self._strip_special} "
+            f"input_gain={'on' if self._gain_on else 'off'}"
+            f"(tgt/cap/floor_db={self._gain_dbg}))"
         )
 
     # ------------------------------------------------------------------
@@ -218,17 +244,75 @@ class Model:
         )
         self._feat_in = int(getattr(self.model.encoder, "_feat_in", 128))
 
+        # Feature-cache geometry (Fix 2). hop = window_stride in samples. n_fft bounds the
+        # STFT boundary so <= ceil(n_fft/2/hop) tail frames are unstable when audio is appended;
+        # MARGIN recomputes them every call. LCTX (a hop multiple >= n_fft) gives the tail
+        # recompute real left context so kept frames are bit-identical to full extraction, and
+        # keeping it a hop multiple makes the splice alignment `drop = MARGIN` exact.
+        pp = self.model.cfg.preprocessor
+        sr = int(pp.get("sample_rate", 16000))
+        self._feat_hop = max(1, int(round(float(pp.get("window_stride", 0.01)) * sr)))  # 160
+        n_fft = int(pp.get("n_fft", 512))
+        import math as _math
+        self._feat_margin = int(_math.ceil(n_fft / 2 / self._feat_hop)) + 2   # 2 + 2 = 4
+        lctx_frames = int(_math.ceil(n_fft / self._feat_hop)) + 1             # ceil(512/160)+1 = 5
+        self._feat_lctx = lctx_frames * self._feat_hop                        # 5*160 = 800 samples
+
     # ------------------------------------------------------------------
-    def _extract_features(self, raw: np.ndarray):
-        """Unnormalized log-mel features for the whole raw buffer -> [1, F, T].
-        dither=0 makes this deterministic, so a given frame index is STABLE as more
-        audio arrives (mel is local) — the encoder cache stays consistent across steps."""
+    def _compute_gain(self, est_window: np.ndarray) -> float:
+        """Frozen boost-only input gain from the first ~100 ms. Returns a scalar in
+        [1.0, cap]. A near-silent estimate window (< floor) -> 1.0 so we never amplify
+        leading silence/noise by +cap dB. Boost-only: we never attenuate audio that the
+        model already handles (only the quiet severe tail needs help)."""
+        if not self._gain_on:
+            return 1.0
+        x = est_window.astype(np.float64)
+        rms = float(np.sqrt(np.mean(x * x))) if x.size else 0.0
+        if rms < self._gain_rms_floor:
+            return 1.0
+        g = self._gain_target_rms / rms
+        return float(min(max(g, 1.0), self._gain_cap))
+
+    def _raw_to_feats(self, raw: np.ndarray):
+        """Run the unnormalized mel extractor over a 1-D raw segment -> [1, F, t]."""
         torch = self._torch
-        if raw.shape[0] < 1:
-            return torch.zeros(1, self._feat_in, 0, device=self._device)
         wav = torch.tensor(raw, dtype=torch.float32, device=self._device).unsqueeze(0)
         wl = torch.tensor([raw.shape[0]], dtype=torch.int64, device=self._device)
         feats, _ = self._raw_preprocessor(input_signal=wav, length=wl)
+        return feats
+
+    def _extract_features(self, raw: np.ndarray):
+        """Unnormalized log-mel features for the raw buffer -> [1, F, T].
+        dither=0 makes this deterministic, so a given frame index is STABLE as more audio
+        arrives (mel is local). Two invariants let us CACHE instead of recomputing the whole
+        buffer each call (Fix 2, O(N^2)->O(N)): (1) the per-file input gain is a frozen scalar
+        (applied here) so scaled audio never changes retroactively; (2) with hop/n_fft fixed,
+        only the last MARGIN frames touch the STFT boundary, so we recompute just the tail
+        (with LCTX real left context) and splice it onto the cached stable prefix. Bit-exact
+        vs full extraction is gated numerically on-pod before this path is trusted."""
+        torch = self._torch
+        if raw.shape[0] < 1:
+            return torch.zeros(1, self._feat_in, 0, device=self._device)
+        if self._gain is None:
+            self._gain = self._compute_gain(raw[:CHUNK_SAMPLES])
+        scaled = raw if self._gain == 1.0 else np.clip(raw * self._gain, -1.0, 1.0).astype(np.float32)
+
+        if not self._feat_cache_on or self._feat_cache is None:
+            feats = self._raw_to_feats(scaled)
+            if self._feat_cache_on:
+                self._feat_cache = feats
+            return feats
+
+        # Incremental: trust cached frames [0:stable], recompute [stable:] with left context.
+        HOP, MARGIN, LCTX = self._feat_hop, self._feat_margin, self._feat_lctx
+        Tc = self._feat_cache.shape[-1]
+        stable = max(0, Tc - MARGIN)
+        start = max(0, stable * HOP - LCTX)          # LCTX and stable*HOP are hop multiples
+        seg_feats = self._raw_to_feats(scaled[start:])
+        drop = stable - (start // HOP)               # seg frames preceding global `stable`
+        drop = max(0, min(drop, seg_feats.shape[-1]))
+        feats = torch.cat([self._feat_cache[:, :, :stable], seg_feats[:, :, drop:]], dim=-1)
+        self._feat_cache = feats
         return feats
 
     # ------------------------------------------------------------------
@@ -255,6 +339,8 @@ class Model:
     def reset(self) -> None:
         """Fresh encoder cache + decoder state + feature buffer for a new file."""
         self._raw_buf = np.zeros(0, dtype=np.float32)
+        self._gain = None    # per-file frozen input gain; set once from the first ~100 ms
+        self._feat_cache = None  # incremental feature cache (Fix 2); rebuilt per file
         self._feat_idx = 0   # feature-frame pointer (== buffer_idx in the NeMo buffer)
         self._step = 0       # step counter (drives first-chunk sizing + drop_extra)
         self._hyp_text = ""

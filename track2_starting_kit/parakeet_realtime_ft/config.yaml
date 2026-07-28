@@ -37,3 +37,26 @@ output:
   # model.py's output normalization — NEVER in the scorer (house rule).
   strip_special_tokens: true
   special_token_pattern: "<[^>]+>"   # <EOU>, <SOS>, etc. removed from returned text
+
+input_gain:
+  # Causal frozen-scalar input gain (fixes the severe-tail EMPTIES). This model's
+  # preprocessor is normalize='NA' -> absolute level reaches the encoder, so the
+  # ~10 dB-quiet severe speaker is OOD-quiet -> blank propensity (exp_parakeet_ft_empties).
+  # The gain is estimated ONCE from the first 100 ms chunk and FROZEN for the file:
+  # adaptive gain would rescale earlier frames every step and break the cache-stability
+  # invariant that cache-aware streaming depends on. Boost-only (never attenuate).
+  #   target_dbfs   — RMS target; matches the offline gain-norm probe (-25 dBFS = 21%->29% recovery).
+  #   cap_db        — HARD ceiling on boost. Uncapped +39/+42 dB caused noise-hallucination (PLAN risk).
+  #   floor_dbfs    — if the estimate window is quieter than this it is treated as silence -> gain 1.0
+  #                   (never amplify a near-silent leading window by +cap dB).
+  # Each is env-overridable for on-pod sweeping: SAPC2_INPUT_GAIN(on|off),
+  # SAPC2_TARGET_DBFS, SAPC2_GAIN_CAP_DB, SAPC2_RMS_FLOOR_DBFS.
+  # DEFAULT OFF (2026-07-27): the causal freeze-from-first-100ms gain is FALSIFIED for the
+  # severe empties — 40/48 have a near-silent onset (<-45 dBFS) so the frozen gain floors to
+  # 1.0 → 0/48 recovered through the real streaming harness (offline full-RMS got 14/48). It's
+  # neutral-to-slightly-positive on general Dev_streaming (12.99% vs 13.18%) but does not do its
+  # job, so it does not ship on by default. See PLAN.md / memory parakeet-ft-wrapper-streaming.
+  enabled: false
+  target_dbfs: -25.0
+  cap_db: 20.0
+  floor_dbfs: -45.0
