@@ -1,0 +1,7 @@
+[sap] Train ids=336075 spk=875 | Dev ids=47929 spk=124
+[sap] speaker overlap Train&Dev = 0
+[knnvc] source-split counts: {'train': 144291, 'dev': 18797, 'unknown': 40339}
+[knnvc] distinct source speakers per class: {'train': 307, 'dev': 41, 'unknown': 72}
+[f5] speaker-bucket split counts (wavs): {'train': 104113, 'dev': 11931, 'unknown': 23373}
+[f5] distinct speaker buckets per class: {'train': 727, 'dev': 88, 'unknown': 193}
+D0_LEAK_CHECK_DONE /workspace/d0_leak_check.json

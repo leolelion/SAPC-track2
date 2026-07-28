@@ -249,3 +249,61 @@ Metric columns: **CER** / **WER** (Dev, batch/offline) · **CER_stream** (Dev_st
 - **Conclusion**: kept | rejected — why
 - **Next**: <single next question this raises>
 -->
+
+## exp_d0_synth_forensics — D0 synthetic-corpus forensics (+ unplanned leakage audit)
+- **Status**: done (2026-07-28/29, pod 38.80.152.148:30836, CPU-only, ran alongside D1 on the GPU)
+- **Artifacts**: `experiments/exp_d0_synth_forensics/` (`NOTES.md` = full writeup, `d0_forensics.json`,
+  `d0_leak_check.json`). New scripts: `scripts/build_knnvc_transcripts.py`, `scripts/d0_leak_check.py`.
+- **Hypothesis**: the two synthetic corpora contain parakeet's failure region (short, quiet-onset utts)
+  and carry new information → D2/D3 are worth GPU.
+- **Pre-registered gates**: G-COVER (≥5% ≤3-word AND onset p25 ≤ −45 dBFS) · G-PROV (<80% SAP text
+  match) · G-EOS (|F5 − kNN-VC trailing silence| < 300 ms).
+- **Result**:
+  - **G-COVER[kNN-VC] PASS** — 21.1% ≤3 words, onset p25 −56.3 dBFS.
+  - **G-PROV[kNN-VC] FAIL** — 100.0% exact SAP-Train text match. kNN-VC is voice conversion of real SAP
+    audio, so this is true by construction; it carries new ACOUSTICS, zero new lexical information.
+  - **G-EOS PASS** — F5 320 ms vs kNN-VC 340 ms trailing silence (gap 20 ms). Trailing-silence mismatch
+    is NOT the mechanical explanation for the D7 EOS collapse.
+  - **G-COVER[F5] UNMEASURED** (the log prints FAIL — that verdict is a reporting artifact, do not cite
+    it). F5 transcripts are not on the pod at all (the "candidate transcript files" discover found are
+    tar-packaging manifests). F5 onsets are exact digital zero (verified 10/10 files, `nonzero=0/2400`),
+    so `-inf` was filtered out of the percentile and counted as 100% ≤ −45 dBFS.
+- **UNPLANNED, BINDING FINDING — both synthetic corpora contain Dev-derived material**: kNN-VC 18,797 wavs
+  from 41 Dev speakers (9.2%); F5 11,931 wavs from 88 Dev-speaker buckets. Train/Dev speakers are disjoint
+  (overlap 0), so provenance is decidable per file. **Any D2/D3 run must filter to Train-provenance first**,
+  or the Dev gate — our only ship authority — is contaminated. A further 40,339 kNN-VC + 23,373 F5 wavs match
+  neither split ("unknown"); treat as excluded until identified.
+- **Conclusion**: D2 (kNN-VC) survives as **acoustic augmentation only** — cap ≤25% of steps, finish on real,
+  expect modest gains on the 11.3-pt empty lever. D3 (F5) is neither promoted nor demoted: unproven, and its
+  slot→text table must be found off-pod before it can be scoped.
+- **Next**: does D1 (the joint unfreeze) move the empties at all? Everything data-side is downstream of that.
+
+## exp_armB_parakeet — D1 Arm B, joint unfreeze (RUNNING)
+- **Status**: running (started 2026-07-28 21:26Z; rung l0 = 4 epochs × ~45 min)
+- **Base**: `/workspace/sweep/parakeet120.nemo` · train `/workspace/nemo_ft/train.json` (331,112, SAP Train)
+  · val `/workspace/nemo_ft/val.json` (2,000)
+- **Two model corrections found before/while launching** (both verified, both change how results read):
+  1. **The base checkpoint already ships `fastemit_lambda=0.03`** — verified on the instantiated loss
+     (`RNNTLossNumba.fastemit_lambda=0.03`), not just a config dump. So the runbook's "λ=0 control" does not
+     exist, and the pre-registered ladder {0.003, 0.005, 0.01} would *lower* emission pressure below the base,
+     i.e. the opposite of the intent. Rung `l0` inherits 0.03 and is still the correct control for the
+     UNFREEZE (Arm A trained under the same 0.03). The follow-on rung goes **up** (λ=0.06), justified by the
+     measured error profile below.
+  2. **`val.json` is drawn from the organizers' Dev split, not a Train-derived speaker-disjoint slice** as the
+     runbook states (paths under `processed/Dev/`; 2000/2000 ids join to `Dev.csv`, 0 to `Train.csv`). No
+     train/val leakage (train is all `processed/Train/`), but **checkpoint selection has been seeing Dev** —
+     for Arm A too. Caveat on the independence of any Dev-based ship gate.
+- **Arm A baseline re-measured on the identical val set** (`scripts/val_metrics.py`, same pinned [70,1] ctx):
+  CER **24.93%** · empties **324/2000 (16.2%)** · insertions **1.38%** · **deletions 24.76%** · subs 5.87%.
+  Deletions outnumber substitutions **4:1** — independent corroboration of the confident-blank theory D1
+  targets, and the reason the FastEmit direction is UP.
+  Note the empty rate on this broader Dev-drawn set (**16.2%**) exceeds the Dev_diag severe slice (11.3%),
+  which answers Stage-0/GATE-REP's "does the pathology generalize" on the PROCEED side.
+- **D6 (short-command oversampling) — premise dented before spending a rung on it**: ≤3-word utterances are
+  already **22.5% of train (74,606 utts)**, not rare. The internal-LM-bias-on-rare-short-phrases rationale does
+  not fit this data; ×3 would push train to ~45% short. Manifest is built (`/workspace/nemo_ft/train_d6.json`,
+  `scripts/d6_oversample.py`) but the rung is deprioritized pending a reason to believe it.
+- **Gates**: GATE-TRAIN (proxy) = val CER < 24.93% AND empties < 324 AND insertions ≤ 1.59%.
+  GATE-SHIP (only ship authority) = official two-ref sclite Dev_diag CER ≤ 24% AND mean(TTFT,TTLT) ≤ 420 ms.
+- **Epoch 0**: val CER 0.2978 vs Arm A's epoch-0 0.2974 — no collapse (tripwire not tripped), no gain yet.
+- **Next**: rung l0 gates → if it misses GATE-TRAIN, `scripts/armb_master.sh` auto-runs rung fe06 (λ=0.06).

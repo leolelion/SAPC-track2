@@ -1,0 +1,30 @@
+[sap] 105317 unique normalized Train transcripts
+[empty-slice] 151 vocabulary items from the 48-utterance empty slice
+[audit] F5-TTS ...
+[audit] kNN-VC ...
+
+================ D0 VERDICTS ================
+FAIL  G-COVER[f5]
+        short_le3_words_pct = None
+        onset_dbfs_p25 = None
+        rule: PASS if short<=3w >= 5% AND onset p25 <= -45 dBFS
+        consequence: corpus lacks the failure region; D2/D3 demote to generic robustness
+PASS  G-COVER[knnvc]
+        short_le3_words_pct = 21.10595948465254
+        onset_dbfs_p25 = -56.33422278622426
+        rule: PASS if short<=3w >= 5% AND onset p25 <= -45 dBFS
+PASS  G-EOS
+        f5_trail_sil_median_ms = 320.0
+        knnvc_trail_sil_median_ms = 340.0
+        gap_ms = 20.000000000000018
+        rule: PASS if |median trailing silence F5 - kNN-VC| < 300 ms
+N/A   G-PROV[f5]
+        exact_match_sap_train_pct = None
+        rule: PASS if exact-text match vs SAP Train < 80%
+FAIL  G-PROV[knnvc]
+        exact_match_sap_train_pct = 100.0
+        rule: PASS if exact-text match vs SAP Train < 80%
+        consequence: synth is a re-weighting of SAP, not new data; cap mix fraction hard
+
+wrote /workspace/d0_forensics.json
+D0_FORENSICS_DONE

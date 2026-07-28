@@ -1,0 +1,33 @@
+{
+  "sap": {
+    "train_ids": 336075,
+    "dev_ids": 47929,
+    "train_speakers": 875,
+    "dev_speakers": 124,
+    "speaker_overlap_train_dev": 0
+  },
+  "knnvc": {
+    "wavs_by_source_split": {
+      "train": 144291,
+      "dev": 18797,
+      "unknown": 40339
+    },
+    "distinct_source_speakers": {
+      "train": 307,
+      "dev": 41,
+      "unknown": 72
+    }
+  },
+  "f5tts": {
+    "wavs_by_speaker_split": {
+      "train": 104113,
+      "dev": 11931,
+      "unknown": 23373
+    },
+    "distinct_speaker_buckets": {
+      "train": 727,
+      "dev": 88,
+      "unknown": 193
+    }
+  }
+}
