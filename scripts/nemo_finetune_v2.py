@@ -28,6 +28,11 @@ ap.add_argument("--adapter-dim", type=int, default=64, help="[peft] Linear bottl
 ap.add_argument("--no-speed", action="store_true", help="drop speed-perturb; keep ONLY gain aug (research/40)")
 ap.add_argument("--gain-min", type=float, default=-20.0, help="gain aug min dBFS (research/40 mild=-8)")
 ap.add_argument("--gain-max", type=float, default=10.0, help="gain aug max dBFS (research/40 mild=+8)")
+# --- FastEmit (research 2026-07-28, arXiv 2010.11148): scales token-grad by (1+lambda), blank-grad
+# unchanged -> direct counter to the frozen-joint confident-blank empties AND lowers TTFT (both Pareto
+# axes). NeMo-native RNNT loss kwarg. Safe band 0.004-0.01; regresses >=0.02. DEFAULT 0.0 = no change. ---
+ap.add_argument("--fastemit-lambda", type=float, default=0.0,
+                help="RNNT FastEmit regularization strength; 0.0=off. Sweep {0.003,0.005,0.01}, never >=0.02.")
 a = ap.parse_args()
 os.makedirs(a.out_dir, exist_ok=True)
 
@@ -46,6 +51,23 @@ MAX_STEPS = a.max_steps if a.max_steps is not None else (400 if a.mode == "overf
 
 print(f"=== restore {a.base_nemo} ===")
 m = nemo_asr.models.EncDecRNNTBPEModel.restore_from(a.base_nemo, map_location="cpu")
+
+# --- FastEmit: rebuild the RNNT loss with fastemit_lambda>0 (opt-in; default 0.0 leaves loss untouched).
+# Targets the frozen-joint empties + lowers emission latency. VERIFY-ON-POD: RNNTLoss wants vocab size
+# WITHOUT blank (num_classes_with_blank - 1); the GATE0 print below must show the lambda actually set. ---
+if a.fastemit_lambda and a.fastemit_lambda > 0:
+    from nemo.collections.asr.losses.rnnt import RNNTLoss
+    nc = m.joint.num_classes_with_blank - 1
+    m.loss = RNNTLoss(num_classes=nc, loss_name="default",
+                      loss_kwargs={"fastemit_lambda": a.fastemit_lambda, "clamp": -1.0})
+    with open_dict(m.cfg):
+        m.cfg.loss = OmegaConf.create({"loss_name": "default",
+            "warprnnt_numba_kwargs": {"fastemit_lambda": a.fastemit_lambda, "clamp": -1.0}})
+    print(f"[fastemit] RNNTLoss rebuilt: fastemit_lambda={a.fastemit_lambda} num_classes={nc}")
+    print("[GATE0][fastemit] loss=", type(m.loss).__name__,
+          "lambda(cfg)=", m.cfg.loss.warprnnt_numba_kwargs.fastemit_lambda)
+else:
+    print("[fastemit] disabled (lambda=0.0) — loss unchanged")
 
 # --- data: classic manifest dataloader (use_lhotse=False) + gain/speed augmentor [research/37 fix] ---
 with open_dict(m.cfg):
