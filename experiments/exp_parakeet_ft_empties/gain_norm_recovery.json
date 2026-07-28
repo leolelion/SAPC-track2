@@ -1,0 +1,421 @@
+{
+  "target_dbfs": -25.0,
+  "att_context": [
+    70,
+    1
+  ],
+  "n": 48,
+  "recovered": 14,
+  "recovered_pct": 29.2,
+  "baseline_recovered_pct_unnormalized": 20.8,
+  "by_speaker": {
+    "55c1784a-ece4-414a-25b4-08dc18e8f490": {
+      "n": 22,
+      "recovered": 3,
+      "recovered_pct": 13.6
+    },
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d": {
+      "n": 6,
+      "recovered": 3,
+      "recovered_pct": 50.0
+    },
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730": {
+      "n": 5,
+      "recovered": 1,
+      "recovered_pct": 20.0
+    },
+    "e42558d6-5a42-437d-e7c4-08dcd9e31338": {
+      "n": 4,
+      "recovered": 3,
+      "recovered_pct": 75.0
+    },
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1": {
+      "n": 2,
+      "recovered": 1,
+      "recovered_pct": 50.0
+    },
+    "4902e925-28da-41fa-da79-08dd7d685e99": {
+      "n": 1,
+      "recovered": 0,
+      "recovered_pct": 0.0
+    },
+    "54618732-a2cb-49ec-c034-08dc605e0191": {
+      "n": 1,
+      "recovered": 0,
+      "recovered_pct": 0.0
+    },
+    "d41daa38-6d46-433c-6825-08dd025ce1a9": {
+      "n": 1,
+      "recovered": 0,
+      "recovered_pct": 0.0
+    },
+    "5e17c1c9-eb2a-4fa6-4985-08dcb4d7acba": {
+      "n": 1,
+      "recovered": 1,
+      "recovered_pct": 100.0
+    },
+    "b2f16a07-8441-43c9-fac8-08dd0a4af9ba": {
+      "n": 1,
+      "recovered": 1,
+      "recovered_pct": 100.0
+    },
+    "fb9c683c-41a5-486c-ae6a-08dc945c48db": {
+      "n": 1,
+      "recovered": 0,
+      "recovered_pct": 0.0
+    },
+    "96ada12b-88af-44ce-0219-08dc41d581c9": {
+      "n": 1,
+      "recovered": 1,
+      "recovered_pct": 100.0
+    },
+    "40c01b80-b083-448d-973b-08dca59f2b1c": {
+      "n": 1,
+      "recovered": 0,
+      "recovered_pct": 0.0
+    },
+    "e6637ea3-8d88-40ca-8b32-08dc44f243ab": {
+      "n": 1,
+      "recovered": 0,
+      "recovered_pct": 0.0
+    }
+  },
+  "per_utt": [
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_33056_15780",
+      "recovered": true,
+      "gain_db": -2.87,
+      "rms_after": -25.0,
+      "raw": "other"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_29722_15940",
+      "recovered": true,
+      "gain_db": -0.73,
+      "rms_after": -25.0,
+      "raw": " \u2047 "
+    },
+    {
+      "id": "96ada12b-88af-44ce-0219-08dc41d581c9_30194_4529",
+      "recovered": true,
+      "gain_db": -0.38,
+      "rms_after": -25.0,
+      "raw": "dog"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_31239_15939",
+      "recovered": true,
+      "gain_db": -0.35,
+      "rms_after": -25.0,
+      "raw": "cran"
+    },
+    {
+      "id": "b2f16a07-8441-43c9-fac8-08dd0a4af9ba_31699_11011",
+      "recovered": true,
+      "gain_db": 1.0,
+      "rms_after": -25.0,
+      "raw": "i need"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_78_11398",
+      "recovered": true,
+      "gain_db": 1.57,
+      "rms_after": -25.0,
+      "raw": "siri"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_30828_11398",
+      "recovered": true,
+      "gain_db": 2.13,
+      "rms_after": -25.0,
+      "raw": "com"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_27569_4579",
+      "recovered": true,
+      "gain_db": 8.77,
+      "rms_after": -25.62,
+      "raw": "but well that twice as strong out of the"
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29347_8746",
+      "recovered": true,
+      "gain_db": 11.66,
+      "rms_after": -25.0,
+      "raw": "period"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_33460_12269",
+      "recovered": true,
+      "gain_db": 14.94,
+      "rms_after": -25.8,
+      "raw": "break"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_14290_4629",
+      "recovered": true,
+      "gain_db": 16.49,
+      "rms_after": -25.0,
+      "raw": "there was a time"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_243_4623",
+      "recovered": true,
+      "gain_db": 24.61,
+      "rms_after": -25.0,
+      "raw": "tell me quote"
+    },
+    {
+      "id": "5e17c1c9-eb2a-4fa6-4985-08dcb4d7acba_1053_10738",
+      "recovered": true,
+      "gain_db": 39.13,
+      "rms_after": -25.0,
+      "raw": "when is on my shopping list"
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29573_8371",
+      "recovered": true,
+      "gain_db": 42.68,
+      "rms_after": -25.0,
+      "raw": "take the powers on sale to shop the mace"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_29746_15939",
+      "recovered": false,
+      "gain_db": -3.73,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_1071_8745",
+      "recovered": false,
+      "gain_db": -2.75,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1076_8744",
+      "recovered": false,
+      "gain_db": -2.68,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_13501_4628",
+      "recovered": false,
+      "gain_db": -1.92,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_1062_5234",
+      "recovered": false,
+      "gain_db": -1.59,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_626_4646",
+      "recovered": false,
+      "gain_db": -1.49,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_34363_10610",
+      "recovered": false,
+      "gain_db": -1.48,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_469_8750",
+      "recovered": false,
+      "gain_db": -1.27,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_177_15939",
+      "recovered": false,
+      "gain_db": -0.99,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29097_8745",
+      "recovered": false,
+      "gain_db": -0.81,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_33693_15938",
+      "recovered": false,
+      "gain_db": -0.63,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_28678_4646",
+      "recovered": false,
+      "gain_db": -0.09,
+      "rms_after": -26.91,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_565_4628",
+      "recovered": false,
+      "gain_db": -0.09,
+      "rms_after": -29.3,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_82_4562",
+      "recovered": false,
+      "gain_db": -0.09,
+      "rms_after": -26.51,
+      "raw": ""
+    },
+    {
+      "id": "e6637ea3-8d88-40ca-8b32-08dc44f243ab_31936_4605",
+      "recovered": false,
+      "gain_db": -0.09,
+      "rms_after": -26.88,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1119_4576",
+      "recovered": false,
+      "gain_db": -0.09,
+      "rms_after": -30.05,
+      "raw": ""
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_136_14082",
+      "recovered": false,
+      "gain_db": 1.64,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1117_3802",
+      "recovered": false,
+      "gain_db": 1.88,
+      "rms_after": -32.15,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_162_4579",
+      "recovered": false,
+      "gain_db": 2.57,
+      "rms_after": -27.71,
+      "raw": ""
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_39_8794",
+      "recovered": false,
+      "gain_db": 4.06,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1074_4652",
+      "recovered": false,
+      "gain_db": 4.57,
+      "rms_after": -30.13,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_132_4576",
+      "recovered": false,
+      "gain_db": 5.44,
+      "rms_after": -28.11,
+      "raw": ""
+    },
+    {
+      "id": "40c01b80-b083-448d-973b-08dca59f2b1c_39_7388",
+      "recovered": false,
+      "gain_db": 6.35,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1054_3802",
+      "recovered": false,
+      "gain_db": 6.69,
+      "rms_after": -25.51,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_63_4562",
+      "recovered": false,
+      "gain_db": 7.93,
+      "rms_after": -27.16,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_605_4646",
+      "recovered": false,
+      "gain_db": 8.07,
+      "rms_after": -27.62,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_4937_4628",
+      "recovered": false,
+      "gain_db": 11.57,
+      "rms_after": -27.86,
+      "raw": ""
+    },
+    {
+      "id": "fb9c683c-41a5-486c-ae6a-08dc945c48db_148_6752",
+      "recovered": false,
+      "gain_db": 13.28,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_636_4650",
+      "recovered": false,
+      "gain_db": 14.49,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_572_4629",
+      "recovered": false,
+      "gain_db": 14.5,
+      "rms_after": -28.28,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_189_4579",
+      "recovered": false,
+      "gain_db": 17.16,
+      "rms_after": -27.52,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_49_4652",
+      "recovered": false,
+      "gain_db": 17.87,
+      "rms_after": -28.41,
+      "raw": ""
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_583_4629",
+      "recovered": false,
+      "gain_db": 20.33,
+      "rms_after": -25.0,
+      "raw": ""
+    },
+    {
+      "id": "d41daa38-6d46-433c-6825-08dd025ce1a9_31837_10576",
+      "recovered": false,
+      "gain_db": 22.83,
+      "rms_after": -25.0,
+      "raw": ""
+    }
+  ]
+}

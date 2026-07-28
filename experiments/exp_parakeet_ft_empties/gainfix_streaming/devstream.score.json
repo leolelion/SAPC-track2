@@ -1,0 +1,15 @@
+{
+  "predict_csv": "/workspace/parakeet_ft/gate_gainon/devstream.predict.csv",
+  "n_scored": 123,
+  "empty_hyps": 5,
+  "cer_pct": 12.994,
+  "wer_pct": 16.869,
+  "method": "dual-ref min, macro-mean, eval_dev100 normalize (NOT official sclite)",
+  "per_etiology_cer_pct": {
+    "ALS": 14.9,
+    "Cerebral Palsy": 18.95,
+    "Down Syndrome": 13.2,
+    "Parkinson's Disease": 6.38,
+    "Stroke": 13.59
+  }
+}

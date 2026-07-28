@@ -1,0 +1,21 @@
+{
+  "n_utts_total": 123,
+  "n_utts_with_timing": 123,
+  "n_utts_with_mfa_start": 123,
+  "ttft_definition": "first_non_empty_partial_or_last - (audio_send_start + mfa_speech_start)",
+  "ttlt_definition": "final_visible - audio_end_oracle",
+  "ttft_sec": {
+    "count": 123,
+    "median": 0.6687569618225098,
+    "p50": 0.6687569618225098,
+    "p90": 2.1223980903625486,
+    "p95": 2.45134642124176
+  },
+  "ttlt_sec": {
+    "count": 123,
+    "median": 0.0727846622467041,
+    "p50": 0.0727846622467041,
+    "p90": 0.13412022590637204,
+    "p95": 0.21696875095367424
+  }
+}

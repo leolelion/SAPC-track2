@@ -1,0 +1,9 @@
+durations: [1.6, 1.6, 1.7, 1.8, 14.8, 14.9, 14.9, 14.9]
+### FEAT_CACHE=off (O(N^2) reference) ###
+OFF_OK
+### FEAT_CACHE=on (incremental) ###
+ON_OK
+TIMING: off=123s on=121s
+### EQUIVALENCE DIFF (empty == identical tokens) ###
+RESULT: EQUIV_IDENTICAL
+EQV_DONE

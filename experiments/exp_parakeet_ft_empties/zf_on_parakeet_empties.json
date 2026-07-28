@@ -1,0 +1,348 @@
+{
+  "other_name": "zipformer_beam4",
+  "normalizer_official": true,
+  "n_parakeet_empty": 48,
+  "other_nonempty": 28,
+  "other_nonempty_pct": 58.3,
+  "other_mean_cer_pct_on_these": 66.33,
+  "other_good_lt50cer": 15,
+  "other_good_pct": 31.2,
+  "per_utt": [
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29347_8746",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "PERIOD",
+      "ref": "period"
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_1062_5234",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "ANSWER THE CALL",
+      "ref": "answer the call"
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_39_8794",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "ALEXA",
+      "ref": "alexa"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_78_11398",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "HEY SIRI",
+      "ref": "hey siri"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_34363_10610",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "THROW",
+      "ref": "throw"
+    },
+    {
+      "id": "96ada12b-88af-44ce-0219-08dc41d581c9_30194_4529",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "DOG",
+      "ref": "dog"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_33056_15780",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "OTHER",
+      "ref": "other"
+    },
+    {
+      "id": "40c01b80-b083-448d-973b-08dca59f2b1c_39_7388",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "ALEXA",
+      "ref": "alexa"
+    },
+    {
+      "id": "e6637ea3-8d88-40ca-8b32-08dc44f243ab_31936_4605",
+      "nonempty": true,
+      "cer": 0.0,
+      "other_hyp": "FOOTBALL",
+      "ref": "football"
+    },
+    {
+      "id": "5e17c1c9-eb2a-4fa6-4985-08dcb4d7acba_1053_10738",
+      "nonempty": true,
+      "cer": 0.074,
+      "other_hyp": "WHAT IS ON MY SHOPPING LI",
+      "ref": "what is on my shopping list"
+    },
+    {
+      "id": "fb9c683c-41a5-486c-ae6a-08dc945c48db_148_6752",
+      "nonempty": true,
+      "cer": 0.143,
+      "other_hyp": "CORTAN",
+      "ref": "cortana"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_605_4646",
+      "nonempty": true,
+      "cer": 0.323,
+      "other_hyp": "LOWER THE TEMPERATURE",
+      "ref": "lower the temperature 3 degrees"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_82_4562",
+      "nonempty": true,
+      "cer": 0.333,
+      "other_hyp": "WHEN DID THIS SONG",
+      "ref": "when did this song come out"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_31239_15939",
+      "nonempty": true,
+      "cer": 0.333,
+      "other_hyp": "CRAN",
+      "ref": "crayon"
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_136_14082",
+      "nonempty": true,
+      "cer": 0.467,
+      "other_hyp": "BOIL THE",
+      "ref": "boil boil the kettle"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_29746_15939",
+      "nonempty": true,
+      "cer": 0.55,
+      "other_hyp": "HE HUGS WIN",
+      "ref": "did the h seahawks win"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_162_4579",
+      "nonempty": true,
+      "cer": 0.667,
+      "other_hyp": "START",
+      "ref": "start listening"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_626_4646",
+      "nonempty": true,
+      "cer": 0.703,
+      "other_hyp": "THE LITTLE BOY SEA",
+      "ref": "tell me about the seattle sounders fc"
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29573_8371",
+      "nonempty": true,
+      "cer": 0.705,
+      "other_hyp": "SHOPPING LIST",
+      "ref": "add paper towels and cereal to shopping list"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1119_4576",
+      "nonempty": true,
+      "cer": 0.707,
+      "other_hyp": "I NEED TO RETURN THIS",
+      "ref": "i used to make waffles for kids our kids i unk"
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_469_8750",
+      "nonempty": true,
+      "cer": 0.72,
+      "other_hyp": "IRENE AT",
+      "ref": "is there rain on the 16th"
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_1071_8745",
+      "nonempty": true,
+      "cer": 0.75,
+      "other_hyp": "WE ARE BEACH",
+      "ref": "heat on heat"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_27569_4579",
+      "nonempty": true,
+      "cer": 0.8,
+      "other_hyp": "HOLIDAY IN THE",
+      "ref": "the plume jerked twice as the skunk halted in the trail"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_29722_15940",
+      "nonempty": true,
+      "cer": 0.846,
+      "other_hyp": "SET",
+      "ref": "s saturday at 7"
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29097_8745",
+      "nonempty": true,
+      "cer": 0.875,
+      "other_hyp": "PLEASE EXPLAIN TO RAIN THIS",
+      "ref": "make the screen brighter"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1117_3802",
+      "nonempty": true,
+      "cer": 0.897,
+      "other_hyp": "STOP",
+      "ref": "unk toast it put on some parmigiano unk"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_13501_4628",
+      "nonempty": true,
+      "cer": 0.948,
+      "other_hyp": "LIKELY",
+      "ref": "he located a drift which ran out into the meadow like the fin of a great fish"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_132_4576",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "what movies came out last week"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1054_3802",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "hang up"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_583_4629",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "do i have anything scheduled for friday"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_28678_4646",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "the soldier told them the king that the king was very sorry for the way he had treated his daughter"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_63_4562",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "when is it going to rain"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_636_4650",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "preheat the oven to 300 degrees"
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1076_8744",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "area 532 i mean 621 4879"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_33693_15938",
+      "nonempty": true,
+      "cer": 1.0,
+      "other_hyp": "THROW",
+      "ref": "role"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_49_4652",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "hey google"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_189_4579",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "make it cooler"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_565_4628",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "skip forward 45 seconds"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1074_4652",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "turn on cooling"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_572_4629",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "how much is $150 in euros"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_4937_4628",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "does the tower really lean"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_243_4623",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "tell me a poem"
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_14290_4629",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "there was a fierce eagerness in them"
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_177_15939",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "show me the malls"
+    },
+    {
+      "id": "d41daa38-6d46-433c-6825-08dd025ce1a9_31837_10576",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "faster"
+    },
+    {
+      "id": "b2f16a07-8441-43c9-fac8-08dd0a4af9ba_31699_11011",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "escape"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_30828_11398",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "calm"
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_33460_12269",
+      "nonempty": false,
+      "cer": 1.0,
+      "other_hyp": "",
+      "ref": "quick"
+    }
+  ]
+}

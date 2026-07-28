@@ -107,6 +107,57 @@ memory `small-model-sweep-verdict`.
    (offline≠streaming here), THEN decide **Arm B — joint/pred-net unfreeze** (`nemo_finetune_v2.py --freeze
    joint_unfreeze`) on a hard Dev→Test gate. Arm B is now re-motivated by the blank-propensity finding, but the
    Nemotron scar (added joint capacity → Test regression) still binds. ~2.5h GPU.
+
+   **UPDATE 2026-07-27 — Test1 board forces the priority (memory `test1-standing-and-pareto`).** We shipped
+   `smfoundation` = beam-4 zipformer, now **#4/4 and Pareto-DOMINATED** (yac3xn 18.1%/592ms dominates all;
+   we're dominated twice). Verified from the SAPC2 site: rank = **Pareto frontier**, latency = **mean(TTFT,TTLT)**,
+   **multiple winners** possible. Parakeet Arm A ≈ **357ms mean** (TTFT 640/TTLT 74) — a 235ms margin under the
+   entire field → a non-dominated **frontier-corner win at almost any plausible CER**. Beam-8 zipformer is DEAD
+   for the frontier (better CER, worse on the latency axis we already lose). So the low-latency parakeet corner
+   is our route on. Q call 2026-07-27: pursue parakeet-minimal; GPU pre-approved.
+   - ✅ **Fix 1 (causal input gain) CODED + locally verified** in `track2_starting_kit/parakeet_realtime_ft/`
+     (`config.yaml` input_gain block + `model.py` `_compute_gain`/`_extract_features`). Frozen-scalar gain from
+     the first 100 ms (adaptive would break the frame-stability/cache invariant — Q chose no-delay freeze).
+     Boost-only, target −25 dBFS (matches the offline probe), **+20 dB cap**, −45 dBFS floor; env-overridable
+     (`SAPC2_INPUT_GAIN/TARGET_DBFS/GAIN_CAP_DB/RMS_FLOOR_DBFS`) for on-pod sweep. `py_compile` + gain-branch
+     math verified locally (quiet→+13dB, normal→+0dB, silent→+0dB). Efficacy needs the pod (no NeMo locally).
+   - ⏳ **Fix 2 (O(N²) feature recompute) DEFERRED** — decoupled on purpose. It refactors the streaming-loop's
+     absolute-frame indexing; correctness (feature-cache equivalence) is **not locally verifiable** (no NeMo).
+     It's a budget/validity fix, not an efficacy fix; the gate can **shard** the accuracy pass across workers
+     (per `run_devdiag_norm_full.sh`), so ~17min/425u is tolerable for Dev validation. Fix 2 = a separate
+     pre-submit task with its own on-pod numerical-equivalence assertion. Do NOT gate efficacy on it.
+   - ⛔ **GATE RAN 2026-07-27 (pod `1ppb7l0i5xuna8`, now STOPPED) — causal gain fix FALSIFIED for the empties.**
+     - ✅ **Latency corner HOLDS (the real win):** gain-on Dev_streaming (proxy scorer) = CER **12.99%**, empties
+       5/123, TTFT p50 **669 ms** / TTLT p50 **73 ms** → mean ≈ **371 ms**. Non-dominated vs the Test1 board (min
+       592 ms). Confirms parakeet's frontier-corner thesis (memory `test1-standing-and-pareto`).
+     - ⛔ **Severe empties NOT recovered: 0/48** through the real streaming harness (vs offline probe 14/48=29%).
+       Root cause (audio diagnostic, no model): **40/48 empties have a near-silent onset** — median first-100 ms
+       = **−58.5 dBFS**, below the −45 floor → the causal freeze-from-first-chunk gain floors to **1.0 (no boost)**.
+       Their full-utterance RMS is loud (median −29.6 dBFS), which is why OFFLINE (full-RMS) worked. STRUCTURAL:
+       the empties ARE the quiet-onset utts, so any causal first-chunk estimator is blind to their level. A
+       speech-onset-gated gain would add latency (kills the corner) AND break the frame-stability invariant, and
+       even then caps at the ~29% offline ceiling. **The cheap severe-tail fix is dead.** Fix 1 left default-off.
+     - ✅ **Fix 2 (incremental feature cache) is CORRECT** (equivalence gate: predict CSV byte-identical off vs on)
+       but **NOT a speedup** (off=123s ≈ on=121s): feature extraction was never the bottleneck — per-chunk CPU
+       conformer forward is. The 63-min unsharded Dev_diag was a single-process `gate.sh` artifact; the REAL
+       accuracy pass is multiprocess (contract), so the O(N²) "budget risk" was overstated. Keep Fix 2 as free,
+       proven-safe insurance for pathological long utts; it is not the budget lever.
+     - **VERDICT:** parakeet is a **latency-corner-only** play. Severe CER stays mediocre (~30% / gain-off 29.96%
+       control unchanged, since the empties — the main severe-CER driver — don't recover). Per the verified Pareto
+       scoring (multiple winners; latency = mean(TTFT,TTLT)), the ~371 ms corner is a legitimate frontier WIN
+       **regardless** of severe CER. So the open fork is Q's: (a) ship parakeet Arm A as a low-latency frontier
+       entry **alongside** the banked zipformer (captures the unique corner; needs OFFICIAL `evaluate.sh` gate —
+       today's numbers are proxy), (b) bank zipformer only, or (c) spend on **Arm B** (joint-unfreeze) as the only
+       remaining severe-CER lever — GPU bet, Nemotron scar binds, and it targets blank-propensity not the
+       input-level root cause, so uncertain it helps the empties.
+   - ➡️ **(historical) original GATE plan:** restart pod `1ppb7l0i5xuna8` (STOPPED, disk
+     persists → armA_full/ft_smoke_encoder_only.nemo + SAPC2 data + nemoenv present). Upload updated
+     `model.py`+`config.yaml` only. **Part A (efficacy):** Dev_diag severe accuracy pass, `SAPC2_INPUT_GAIN=off`
+     (control — must reproduce prior 29.96% / 48 empties, proving the edit is inert when off) vs `=on`; score
+     via the REAL `evaluate.sh`/official scorer + empties count. **Part B (corner):** Dev_streaming real
+     streaming pass, gain on; confirm CER + TTFT/TTLT still ≈ 357ms mean. **Decision:** does gain-on cut empties
+     and move severe CER toward/below the zipformer's ~24.85% while holding the latency corner? Stop pod
+     immediately after copying JSON/logs back. Expected pod runtime ~30-45min. Path layout VERIFY-ON-POD first.
 2. **BEFORE any submit — fix wrapper O(N²) feature recompute** (`model.py accept_chunk` re-extracts the whole
    raw buffer each call). Invisible in the real-time streaming pass, but made the untimed ACCURACY pass take
    ~17min on 425 utts → a real 15000s/submission time-budget risk on full Test. Cache features incrementally.

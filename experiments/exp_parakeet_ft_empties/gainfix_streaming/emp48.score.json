@@ -1,0 +1,13 @@
+{
+  "predict_csv": "/tmp/emp48.on.csv",
+  "n_scored": 48,
+  "empty_hyps": 48,
+  "cer_pct": 100.0,
+  "wer_pct": 100.0,
+  "method": "dual-ref min, macro-mean, eval_dev100 normalize (NOT official sclite)",
+  "per_etiology_cer_pct": {
+    "ALS": 100.0,
+    "Cerebral Palsy": 100.0,
+    "Down Syndrome": 100.0
+  }
+}

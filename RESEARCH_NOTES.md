@@ -173,3 +173,39 @@ perturb, forced-align segmentation, full FT, temperature/beam tuning under the *
 - Streaming-decoding penalty: how much CER do we lose going from offline beam to chunked streaming?
 - Can checkpoint-averaging be applied to the zipformer (icefall) the same way (avg `epoch-*.pt`)?
 - Tokenizer: keep LibriSpeech BPE-500 or retrain BPE on SAP text? (CER is char-level, lower stakes.)
+
+### 7.6 Beam search on the parakeet transducer — considerations (Session 2026-07-26, web) `[V-web]`
+Context: parakeet Arm A CER is already good on Dev_streaming (13.18%); the CER damage is the **severe
+tail (29.96%)**, driven by **confident empties** (48/425). Question raised: does beam search help? Notes:
+
+1. **Cost is the whole story, and it lands on CPU — the axis we're scored on.** Transducer beam search
+   re-evaluates the joint+prediction net once per hypothesis per step → **5–10× slower than greedy**
+   (Grigoryan et al., Interspeech 2025). The 2025 NVIDIA method (ALSD++/AES++) narrows the gap to
+   **10–20%**, but explicitly via **CUDA graphs + GPU-batched tensors + GPU LM fusion** — a **GPU result
+   that does not transfer to our CPU-only track** (15000 s budget, TTFT/TTLT scored). On CPU we stay near
+   the 5–10× penalty. This compounds the wrapper's O(N²) feature-recompute tax → real time-budget risk.
+2. **Beam is a CER *squeeze*, not the empty fix.** Confident empties come from the frozen joint emitting
+   blank; beam reorders among *plausible* hypotheses, it won't manufacture tokens. The empty-floor lever is
+   **Arm B (joint unfreeze)**. Sequence beam *after* Arm B, on utterances that already emit text.
+3. **NeMo strategy choice** (cheapest→best-WER): `maes` (adaptive expansions, constrain to **1–2**; best
+   balance — the pick) > `alsd` (length-sync, growth `T+U_max`, streaming-friendly) > `tsd` (slowest,
+   avoid). Batched `malsd_batch`/`maes_batch` speedups are **GPU-oriented — CPU benefit unproven**. Beam
+   size small (**2–4**); our zipformer saw beam-8 > beam-4 by only 0.52 CER (diminishing returns).
+   NB: SAPC1 Team a used **mAES to afford beam 30–40** (§7.1) — but that was **GPU/offline Track-1**, not
+   our CPU streaming budget; do not import their beam width.
+4. **Beam interacts badly with streaming partials.** The visible partial is the current best hypothesis;
+   **beam reordering can retract/flicker or delay stable emission** → can *hurt* TTFT/TTLT even when final
+   CER improves. Must be measured on the faithful `local_decode` streaming pass, not just the accuracy pass.
+5. **Integration blocker now:** we're forced to `greedy_batch` (NeMo 2.7.3 `merge_()` timestamp-dict crash;
+   `loop_labels=False` breaks `partial_hypotheses` — wrapper bug #1). Beam paths in cache-aware streaming
+   likely hit the same `partial_hypotheses` incompatibilities → beam is an integration task, not a flag flip.
+
+**Bottom line:** sequence beam *after* Arm B; if tried, use `maes` expansions=2, beam 2–4, and measure on
+CPU via the faithful streaming pass. Treat as a **latency-budget trade** (may be net-negative on Pareto),
+not a free CER gain — the paper's "cheap beam" is GPU-only.
+
+Sources: [Grigoryan et al., Interspeech 2025](https://www.isca-archive.org/interspeech_2025/grigoryan25_interspeech.pdf)
+([arXiv 2506.00185](https://arxiv.org/pdf/2506.00185)) ·
+[NeMo ASR decoding strategies](https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/configs.html) ·
+[NeMo-Speech PR #12729 (batched malsd/maes)](https://github.com/NVIDIA-NeMo/Speech/pull/12729) ·
+[Speed-of-Light greedy RNN-T (arXiv 2406.03791)](https://arxiv.org/pdf/2406.03791)
