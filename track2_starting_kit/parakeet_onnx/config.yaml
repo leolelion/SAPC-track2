@@ -1,0 +1,60 @@
+# =====================================================================
+#  parakeet_realtime (120M) Arm A — ONNX / onnxruntime deploy config
+#
+#  Runtime knobs ONLY. Everything that describes the MODEL (streaming geometry,
+#  cache shapes, blank id, preprocessor params) lives in weights/streaming_meta.json,
+#  written by scripts/export_parakeet_onnx.py from the checkpoint itself — so the
+#  wrapper can never drift from the graph it is running.
+#
+#  Edit values here; do NOT edit model.py.
+# =====================================================================
+
+runtime:
+  # Intra-op threads PER PROCESS. The eval worker is 24 vCPU / 226 GiB and the
+  # organizers' accuracy pass runs ~20 worker processes on it, so threads multiply
+  # by 20. Measured under that exact topology (exp_nemotron_speed_002): threads=1 was
+  # 4.2x faster wall-clock than threads=4 with byte-identical transcripts. Wall clock
+  # is the 15000 s budget. The cgroup quota is a CEILING on top of this, never the
+  # target. Override per-run with SAPC2_THREADS (env wins).
+  # >>> VERIFY-ON-POD <<< sweep 1/2/4 on the STREAMING pass: if per-chunk compute at
+  # 1 thread exceeds 100 ms the stream falls behind real time and TTFT/TTLT regress.
+  num_threads: 1
+
+encoder:
+  # How much of NeMo's post-encoder trimming the wrapper must redo. NeMo applies
+  # `drop_extra_pre_encoded` in cache_aware_stream_step and `valid_out_len` in
+  # streaming_post_process — both OUTSIDE encoder.forward, which is what got exported.
+  # Whether the exported graph already applies either is an empirical fact about NeMo's
+  # exporter. scripts/parity_parakeet_onnx.py sweeps this 2x2 grid against NeMo
+  # reference tensors; the winner is written here BEFORE packaging.
+  #   nemo — redo the trim in the wrapper (assumes the graph did not)
+  #   none — trust the graph
+  # >>> SET BY PARITY <<< do not ship the defaults unverified.
+  drop_policy: nemo
+  trim_policy: nemo
+
+decoding:
+  # Greedy RNN-T (the low-latency path; matches the banked Arm A measurement).
+  # max_symbols_per_step guards the non-blank loop, as in NeMo's greedy decoder.
+  # null = use the checkpoint's own value (exported into weights/streaming_meta.json).
+  # Set a number here only to override it deliberately; env SAPC2_MAX_SYMBOLS wins over both.
+  max_symbols_per_step: null
+
+output:
+  # parakeet_realtime emits <EOU>; research/46 saw it on 100/123 sweep hyps. Strip
+  # special tokens in the wrapper — NEVER in the scorer (house rule), and never emit
+  # one to sclite (cf. the `unk` assertion that fails a whole submission).
+  strip_special_tokens: true
+  special_token_pattern: "<[^>]+>"
+
+input_gain:
+  # Causal frozen-scalar input gain. SHIPS OFF: falsified against the severe empties —
+  # 40/48 of them have a near-silent onset (<-45 dBFS) so the frozen gain floors to 1.0
+  # and 0/48 recovered through the real harness; official Dev_diag severe was also worse
+  # with it on (19.22% vs 18.69%). Kept purely so the banked A/B is reproducible on a pod
+  # without a code edit. Env overrides: SAPC2_INPUT_GAIN / SAPC2_TARGET_DBFS /
+  # SAPC2_GAIN_CAP_DB / SAPC2_RMS_FLOOR_DBFS.
+  enabled: false
+  target_dbfs: -25.0
+  cap_db: 20.0
+  floor_dbfs: -45.0

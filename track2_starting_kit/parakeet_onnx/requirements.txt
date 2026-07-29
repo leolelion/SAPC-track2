@@ -1,0 +1,5 @@
+# Auto-installed by the Codabench runtime AFTER setup.sh.
+# Intentionally EMPTY of network installs: setup.sh already installs onnxruntime from
+# the bundled wheels with --no-index, and numpy/torch ship in the runtime image.
+# Adding anything here reintroduces a network dependency at submission time — the
+# recurring cause of submission death for this project.
