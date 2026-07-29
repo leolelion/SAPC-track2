@@ -14,15 +14,21 @@ decision metric is known.
 
 ## The thing all of this is aimed at
 
-Parakeet Arm A on Dev_diag severe (n=425, official scorer):
+> **RETRACTED 2026-07-29.** The table below was NOT produced by the official scorer, despite saying so.
+> It came from the error-analysis proxy scripts (single-ref, no min-over-two-refs, no `unk`
+> reconciliation). Arm A's *same* hypothesis CSV rescored through `evaluate.sh` gives **CER 18.69% /
+> WER 24.97%**, not 29.93%. Every derived quantity here — the +11.29-pt empty cost, the 21.00%
+> non-empty CER, "already beats zipformer's 24.85%" — is therefore void. The empty *count* (48/425)
+> is real; the CER arithmetic on top of it is not. Kept, struck, as the record of what we believed.
+> See `EXPERIMENT_LOG.md` → `exp_armB_parakeet` for the control that caught it.
 
-| | value |
+| | ~~value~~ (void) |
 |---|---|
-| total CER | **29.93%** |
-| non-empty CER (377 utts) | 21.00% |
-| empties | **48/425 = 11.3%** |
-| **empty contribution to CER** | **+11.29 pts** |
-| CER if empties merely averaged | 21.00% — **already beats zipformer's 24.85%** |
+| ~~total CER~~ | ~~29.93%~~ → **18.69% official** |
+| ~~non-empty CER (377 utts)~~ | ~~21.00%~~ |
+| empties | **48/425 = 11.3%** (still valid — counted off the CSV) |
+| ~~empty contribution to CER~~ | ~~+11.29 pts~~ |
+| ~~CER if empties merely averaged~~ | ~~21.00%, beats zipformer's 24.85%~~ — **zipformer's 24.85% carries the same provenance risk and is being re-measured officially** |
 
 Empty rate by etiology: ALS 24.5% · CP 10.5% · Down 7.5% · **Parkinson 0% · Stroke 0%**.
 Empty slice shape: **22/48 are ≤3 words** (wake-words/commands), median duration 4.67 s, onset
@@ -33,6 +39,13 @@ Empty slice shape: **22/48 are ≤3 words** (wake-words/commands), median durati
 **The constraint that orders everything below:** the empty tail is an RNN-T confident-blank pathology
 seated in the **joint network**, which Arm A left frozen. No data intervention can move a frozen
 blank boundary. **D1 therefore gates D2–D6.**
+
+> **D1 ANSWERED IT — the premise above is falsified (2026-07-29).** Unfreezing the joint for 4 epochs
+> changed **45% of Dev_diag transcripts** yet moved official severe CER by **−0.05 pts the wrong way**
+> (Arm A 18.69% → l0 18.74%) and moved empties **48 → 50**. A frozen blank boundary was not what was
+> holding the empties: unfreezing it and training changed nothing that mattered. The confident-blank
+> story does not survive its own control, so **D2–D5 no longer inherit it as a rationale** — they must
+> justify themselves on generic robustness, at a much lower expected gain.
 
 ---
 

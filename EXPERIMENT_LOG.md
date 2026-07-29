@@ -306,4 +306,52 @@ Metric columns: **CER** / **WER** (Dev, batch/offline) · **CER_stream** (Dev_st
 - **Gates**: GATE-TRAIN (proxy) = val CER < 24.93% AND empties < 324 AND insertions ≤ 1.59%.
   GATE-SHIP (only ship authority) = official two-ref sclite Dev_diag CER ≤ 24% AND mean(TTFT,TTLT) ≤ 420 ms.
 - **Epoch 0**: val CER 0.2978 vs Arm A's epoch-0 0.2974 — no collapse (tripwire not tripped), no gain yet.
-- **Next**: rung l0 gates → if it misses GATE-TRAIN, `scripts/armb_master.sh` auto-runs rung fe06 (λ=0.06).
+- **Rung l0 trained out** (4 epochs, 2026-07-29 00:39Z). Per-epoch val CER 0.2978 → 0.2806 → 0.2692 → 0.2640,
+  monotone, no collapse. Top-5 averaging had only 4 checkpoints so it averaged **all** of them, epoch 0 included.
+
+### RESULT — the joint unfreeze did NOTHING, and the baseline it was measured against was wrong
+
+**GATE-TRAIN (proxy val, 2000 utts)** — passed on paper, failed on substance:
+
+| | Arm A | Arm B l0 | delta |
+|---|---|---|---|
+| CER % | 24.9343 | 24.8119 | −0.12 |
+| empties | 324 | 323 | **−1 of 2000** |
+| insertions % | 1.3828 | 1.4692 | +0.09 |
+| deletions % | 24.7605 | 23.8747 | −0.89 |
+
+The gate printed `PASS= True`, because I wrote "empty count drops" with **no magnitude** — one utterance
+satisfied it. D1's claim was that unfreezing the joint *collapses* the empty rate. It moved 0.3% relative.
+Deletion:insertion imbalance stayed ~16:1 (Arm A 18:1). **A gate that noise can pass is not a gate.**
+
+**GATE-SHIP (official two-ref sclite, Dev_diag severe n=425)** — and here the real error surfaced:
+
+| run | CER | WER | empties |
+|---|---|---|---|
+| Arm A, hypotheses from 2026-07-26, **rescored today** | **18.69%** | 24.97% | 48 |
+| Arm A + `input_gain` ON | 19.22% | 25.73% | 50 |
+| **Arm B l0** | **18.74%** | 24.93% | 50 |
+
+l0 is **0.05 pts worse than Arm A** — identical within noise, exactly as the proxy said. Latency
+(l0, Dev_streaming): TTFT p50 **0.630 s**, TTLT p50 **0.072 s** → mean **351 ms**.
+
+**The 29.93%/29.96% severe baseline in `PLANNED.md` and line 186 above does not reproduce.** Same Arm A
+hypothesis CSV, official `evaluate.sh`, today → **18.69%**. The 29.9x figure came from the error-analysis
+proxy scripts (single-ref, no min-over-two-refs, no `unk` reconciliation), never from `evaluate.sh`. The
+~11-point gap is what two-ref min scoring buys.
+
+**What this invalidates.** Every quantity derived from 29.93%: "empties cost 11.29 CER pts", "CER if empties
+were merely averaged = 21.00%", "already beats zipformer's 24.85%", and the framing of the whole D-series as
+an empty-tail rescue. The empty *count* (48/425) is real and was measured off the CSV; the CER *arithmetic*
+built on it is not. **`24.85%` for zipformer severe has the same provenance risk and is being re-measured
+through the official scorer before any comparison is believed.**
+
+**Method failure, same family as the 2026-06-24 Nemotron post-mortem.** A proxy number was carried forward
+as if it were the official one and became the reference every later decision was scored against. It is in
+the house rules that proxies never authorize a ship claim — the unwritten half is that **proxies must never
+become baselines either.** Caught only because l0's "11-point win" was too large to believe and the control
+was one rescore of an existing CSV away.
+
+- **Next**: re-measure zipformer beam-4 on Dev_diag severe officially (running); fe06 continues, but its
+  remaining rationale is **latency** (TTFT p50 630 ms), not CER — the unfreeze result undercuts the
+  confident-blank story that motivated raising λ.
