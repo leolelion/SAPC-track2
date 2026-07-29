@@ -429,6 +429,20 @@ that leaned on a Val2k number is measuring those 7 speakers, not the Dev distrib
   `numpy>=1.21.6`, satisfied by the runtime's 1.26.3, so the bundled numpy 2.4.6 wheel is never installed
   over it (`deps ready: ort 1.28.0 | numpy 1.26.3 | torch 2.4.1+cu124`). It only appeared when installing
   into an EMPTY dir.
-- **Artifact**: `parakeet_armA_int8.zip`, 264 MB, sha256 `851d326c7bd6b6af7e44abbc77fb33d22711f1b230c258f0998206b1a35da6d6`.
-- **Next**: Dev_clean2k int8 (gate <=15%, banked 13.51%) is the last criterion; then copy artifacts back
-  and stop the pod. NOT YET SUBMITTED.
+- **Dev_clean2k int8 (n=2000, 122 speakers): CER 13.24% / WER 18.63%** — passes the <=15% gate and edges
+  the banked NeMo Arm A (13.51%). vs zipformer beam-4 18.19%.
+- **Wall-clock budget**: 200 utts (1830 s audio) single-process at the shipping `SAPC2_THREADS=1` took
+  626 s wall (both passes + model load) -> RTF 0.342/worker. Test1 projection with stated assumptions
+  (10521 utts x Dev's 8.01 s mean = 84,300 s audio; 20 worker processes; x1.677 pod->Codabench per-core
+  correction measured in the Nemotron timing gate) = **~2,420 s vs the 15,000 s budget, ~84% margin**
+  (gate: >=30%). Order-checks against Nemotron's 8,432 s projection for a 5x larger model.
+- **Artifact (final)**: `parakeet_armA_int8.zip`, **200.6 MB**, sha256
+  `82bc071adbd7e309cdd48bb22e147c41e8b009ca225933c0a3dc95a40267eca7`, 18 entries, model.py at root.
+  Local copy + all gate JSON/logs: `/Users/o/Downloads/sapc2_parakeet_onnx/`.
+  (The first zip, sha `851d326c...`/246 MB, carried a duplicated `wheels/wheels/` tree from a stray
+  `cp -r`; removed and repackaged, then the offline `--no-index` install was revalidated from the
+  repacked zip.)
+- **ALL FIVE pre-registered ship criteria met.** Pod `1ppb7l0i5xuna8` stopped 2026-07-29.
+- **NOT SUBMITTED** — uploading to Codabench is Q's call.
+- **Cost note**: ~5.5 h of pod time, of which ~80 min was idle because an `exit 1` guard in my own chain
+  script killed the remaining stages unnoticed. Chains now mark every stage with an rc instead of aborting.
