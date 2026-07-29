@@ -363,8 +363,13 @@ Built `Dev_clean2k.csv` on the pod: **2000 utts, 122 speakers** (≤17 per speak
 
 | model | CER | WER | empties |
 |---|---|---|---|
-| zipformer beam-4 | **18.19%** | 24.27% | 20/2000 (1.0%) |
-| parakeet Arm A | *(decoding)* | | |
+| **parakeet Arm A** | **13.51%** | 18.78% | 62/2000 (3.1%) |
+| zipformer beam-4 | 18.19% | 24.27% | 20/2000 (1.0%) |
+
+**Parakeet Arm A wins the broad clean slice by 4.68 CER pts**, on top of winning severe by 3.79 —
+while carrying 3× the empty rate. So the empty tail was never the dominant CER term; the D-series was
+aimed at a lever that the official scorer says is worth far less than the proxy claimed. D1 failing to
+move the empties and parakeet winning *despite* them are the same finding from two directions.
 
 **Val2k is retired as a benchmark.** Same zipformer, same official scorer, both 2000 Dev utts:
 Val2k **29.78%** vs Dev_clean2k **18.19%**. An 11.6-pt swing from the speaker draw alone. Any conclusion
