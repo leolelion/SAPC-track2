@@ -6,9 +6,9 @@ set -uo pipefail
 N=${N:-16}; THREADS=${THREADS:-2}
 SUB=${SUB:-/workspace/finetune/zf_a1_beam4_sub}
 TAG=${TAG:-zf_beam4}
-DATA=/workspace/SAPC2; MAN=$DATA/manifest/Val2k.csv
+DATA=/workspace/SAPC2; MAN=${MAN:-$DATA/manifest/Dev_clean2k.csv}
 PROJ=/workspace/SAPC-template; LD=$PROJ/track2_starting_kit/local_decode.py
-OUT=/workspace/parakeet_ft/val2k_$TAG; SHARDS=$OUT/shards
+OUT=/workspace/parakeet_ft/eval_$TAG; SHARDS=$OUT/shards
 rm -rf "$OUT"; mkdir -p "$SHARDS"
 source /workspace/nemoenv/bin/activate
 export PATH="/workspace/SCTK/bin:$PATH"
@@ -56,7 +56,7 @@ print(f"concat={len(rows)} expected={exp}"); assert len(rows)==exp
 PY
 
 cd $PROJ
-./evaluate.sh --split Val2k --hyp-csv "$OUT/val2k.predict.csv" --start_stage 1 --stop_stage 2 \
+./evaluate.sh --split ${SPLIT:-Dev_clean2k} --hyp-csv "$OUT/val2k.predict.csv" --start_stage 1 --stop_stage 2 \
   > "$OUT/official.log" 2>&1 && echo "[official ok]" || echo "[official FAIL]"
 grep -aiE "cer|wer" "$OUT/official.log" | tail -10
 python3 - "$OUT/val2k.predict.csv" <<'PY'

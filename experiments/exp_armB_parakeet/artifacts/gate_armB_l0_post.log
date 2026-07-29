@@ -1,0 +1,28 @@
+=== [l0] post-chain start 2026-07-29T00:40:04Z ===
+--- GATE-TRAIN (proxy: punct-stripped single-ref) ---
+cer_pct                  armA=   24.9343  armB_l0=   24.8119
+empty_count              armA=  324.0000  armB_l0=  323.0000
+insertion_rate_pct       armA=    1.3828  armB_l0=    1.4692
+deletion_rate_pct        armA=   24.7605  armB_l0=   23.8747
+substitution_rate_pct    armA=    5.8696  armB_l0=    6.1433
+GATE-TRAIN cer_better= True empties_better= True insertions_ok= True PASS= True
+--- real streaming pass: Dev_streaming (CER + TTFT/TTLT) ---
+[devstream decode ok]
+--- real accuracy pass: Dev_diag severe ---
+Terminated
+[devdiag decode FAIL]
+--- GATE-SHIP-CER: official evaluate.sh, Dev_diag (two-ref sclite) ---
+[official devdiag ok]
+WER: 0.2493  (24.93%)
+CER: 0.1874  (18.74%)
+--- GATE-SHIP-LAT: official latency, Dev_streaming ---
+[official latency ok]
+  "ttft_definition": "first_non_empty_partial_or_last - (audio_send_start + mfa_speech_start)",
+  "ttlt_definition": "final_visible - audio_end_oracle",
+  "ttft_sec": {
+    "p50": 0.6297740936279297,
+    "p90": 1.9518915653228757,
+  "ttlt_sec": {
+    "p50": 0.07191681861877441,
+    "p90": 0.1297122478485107,
+ARMB_POST_l0_DONE 2026-07-29T01:43:49Z

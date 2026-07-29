@@ -1,0 +1,21 @@
+Evaluation pipeline: stages 1-2, split=Dev_clean2k
+=== Preparing reference .trn files ===
+  Split:    Dev_clean2k
+  CSV:      /workspace/SAPC2/manifest/Dev_clean2k.csv
+  ref1-col: norm_text_with_disfluency -> /workspace/SAPC2/manifest/ref1.Dev_clean2k.norm.trn
+  ref2-col: norm_text_without_disfluency -> /workspace/SAPC2/manifest/ref2.Dev_clean2k.norm.trn
+  Wrote 2000 utterances
+=== Done ===
+sclite: /workspace/SCTK/bin/sclite
+
+--- Scoring split: Dev_clean2k ---
+Loaded 2000 predictions
+Manifest has 2000 entries
+Matched 2000 / 2000 predictions
+0it [00:00, ?it/s]44it [00:00, 419.32it/s]97it [00:00, 331.57it/s]166it [00:00, 460.09it/s]217it [00:00, 461.14it/s]266it [00:00, 441.94it/s]312it [00:00, 295.98it/s]349it [00:01, 282.44it/s]494it [00:01, 541.47it/s]586it [00:01, 609.03it/s]701it [00:01, 743.33it/s]791it [00:01, 761.50it/s]879it [00:01, 792.96it/s]987it [00:01, 848.40it/s]1076it [00:01, 804.15it/s]1160it [00:01, 704.88it/s]1245it [00:02, 728.43it/s]1376it [00:02, 784.66it/s]1487it [00:02, 856.12it/s]1575it [00:02, 681.45it/s]1725it [00:02, 822.85it/s]1814it [00:02, 826.79it/s]1920it [00:02, 818.22it/s]2000it [00:03, 629.27it/s]
+0it [00:00, ?it/s]1240it [00:00, 12399.04it/s]2000it [00:00, 12644.20it/s]
+#utts: 2000
+WER: 0.1878  (18.78%)
+CER: 0.1351  (13.51%)
+Written to: /workspace/SAPC2/eval/metrics.Dev_clean2k.json
+Done.

@@ -1,0 +1,21 @@
+Evaluation pipeline: stages 1-2, split=Dev_diag
+=== Preparing reference .trn files ===
+  Split:    Dev_diag
+  CSV:      /workspace/SAPC2/manifest/Dev_diag.csv
+  ref1-col: norm_text_with_disfluency -> /workspace/SAPC2/manifest/ref1.Dev_diag.norm.trn
+  ref2-col: norm_text_without_disfluency -> /workspace/SAPC2/manifest/ref2.Dev_diag.norm.trn
+  Wrote 425 utterances
+=== Done ===
+sclite: /workspace/SCTK/bin/sclite
+
+--- Scoring split: Dev_diag ---
+Loaded 425 predictions
+Manifest has 425 entries
+Matched 425 / 425 predictions
+0it [00:00, ?it/s]326it [00:00, 3249.00it/s]425it [00:01, 251.25it/s] 
+0it [00:00, ?it/s]425it [00:00, 5719.37it/s]
+#utts: 425
+WER: 0.3072  (30.72%)
+CER: 0.2248  (22.48%)
+Written to: /workspace/SAPC2/eval/metrics.Dev_diag.json
+Done.

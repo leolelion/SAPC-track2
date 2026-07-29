@@ -1,0 +1,118 @@
+{
+  "ckpt": "/workspace/parakeet_ft/armB_l0/ft_smoke_joint_unfreeze.nemo",
+  "val": "/workspace/nemo_ft/val.json",
+  "n": 2000,
+  "att_context": [
+    70,
+    1
+  ],
+  "cer_pct": 24.811880305671878,
+  "empty_count": 323,
+  "empty_pct": 16.15,
+  "insertion_rate_pct": 1.469211379186172,
+  "substitution_rate_pct": 6.143320129636298,
+  "deletion_rate_pct": 23.874684911775297,
+  "ref_words": 13885,
+  "empties_sample": [
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/d765e201-53e7-41a9-1cdf-08dcd3e137e8/d765e201-53e7-41a9-1cdf-08dcd3e137e8_1075_12651.wav",
+      "ref": "turn on all switches"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/d765e201-53e7-41a9-1cdf-08dcd3e137e8/d765e201-53e7-41a9-1cdf-08dcd3e137e8_1059_9798.wav",
+      "ref": "yeah open reminders"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1131_3802.wav",
+      "ref": "at last billy woodchuck's lips began to feel very weird puckered up as they were"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1128_3802.wav",
+      "ref": "5 of them refused but the 6th agreed to lend 40000"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1133_3802.wav",
+      "ref": "a vague fear crept over her that he might finally succeed in proving to her that it was her duty to resign"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1127_3802.wav",
+      "ref": "he cleared his throat turned to his companion and opened his lips"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1129_3802.wav",
+      "ref": "you can imagine how surprised and puzzled she was"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1827_3802.wav",
+      "ref": "they tolerated his attendance with an air of aversion as though he were an intruder"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_1476_4562.wav",
+      "ref": "but in its train other troubles followed"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_25015_4562.wav",
+      "ref": "the dispute used to be as to the explanation of certain cures"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_17382_4562.wav",
+      "ref": "we will take you off tomorrow before daylight and before folks know what is what"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_21118_4562.wav",
+      "ref": "besides this is only one of a dozen committee rooms"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_23948_4562.wav",
+      "ref": "the black stallion was still a colt and could be handled if properly worked"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_10630_4562.wav",
+      "ref": "the ladies in waiting stood with their perfumed handkerchiefs pressed to their noses"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_4882_4562.wav",
+      "ref": "do not feel like you are have no chance to get rich because you are working where there is no visible opportunity for advancement"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_15656_4562.wav",
+      "ref": "they simply brought forward the big pair of forceps and reached them toward the dragon"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_22232_4562.wav",
+      "ref": "she had an odd face with sharp gray eyes and her wits were sharper yet"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_26515_4576.wav",
+      "ref": "everything the veneerings had was brand new"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_8696_4576.wav",
+      "ref": "naturally men wanted to get on in the world"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_19290_4576.wav",
+      "ref": "it was a flue he was fixing"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_3651_4576.wav",
+      "ref": "adler had made no reply to evelina's reproaches for her own heart was too full of pain"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_2067_4576.wav",
+      "ref": "the same day i drew a draft for 500 with which to start"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_11680_4576.wav",
+      "ref": "they are dressed in white"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_12686_4576.wav",
+      "ref": "when it got quite near her it neighed loudly and galloped past her so quickly that in a moment it was out of her sight"
+    },
+    {
+      "audio_filepath": "/workspace/SAPC2/processed/Dev/55c1784a-ece4-414a-25b4-08dc18e8f490/55c1784a-ece4-414a-25b4-08dc18e8f490_18342_4576.wav",
+      "ref": "in spite of my respect for mister geikie as a geological authority i disagree with his conclusion"
+    }
+  ]
+}

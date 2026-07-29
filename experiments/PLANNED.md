@@ -36,6 +36,15 @@ Empty slice shape: **22/48 are ≤3 words** (wake-words/commands), median durati
 
 **Win condition:** severe CER **≤ 24%** while holding mean(TTFT,TTLT) **≤ 420 ms**.
 
+> **ALREADY MET, and it was met before any of D1–D6 ran (2026-07-29).** Parakeet **Arm A**, the banked
+> encoder-only model, on the official scorer: severe CER **18.69%** at mean(TTFT,TTLT) **356 ms**
+> (TTFT p50 638 ms · TTLT p50 74 ms). It also beats the banked zipformer on both slices —
+> severe 18.69% vs 22.48%, and Dev_clean2k (2000 utts / 122 speakers) **13.51% vs 18.19%**.
+> We were spending GPU hours chasing a win condition a model on disk had already satisfied; we
+> could not see it because the baseline we compared against was a proxy number 11 points too high.
+> **The live question is no longer "how do we make parakeet good enough" — it is "package and ship
+> Arm A", which is a Q decision, not a registry item.**
+
 **The constraint that orders everything below:** the empty tail is an RNN-T confident-blank pathology
 seated in the **joint network**, which Arm A left frozen. No data intervention can move a frozen
 blank boundary. **D1 therefore gates D2–D6.**
@@ -57,12 +66,12 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 | ID | Name | Depends on | Cost | Status | Decision metric |
 |---|---|---|---|---|---|
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
-| **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **running** (rung l0 from 2026-07-28 21:26Z) | val CER + val empty count |
+| **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **done 2026-07-29 — FALSIFIED** → `EXPERIMENT_LOG.md` `exp_armB_parakeet` | severe CER 18.69% → **18.74%** (worse), empties **48 → 50** |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |
-| D2 | Arm B + kNN-VC subset | D0 pass, D1 pass, **+ Train-provenance filter (D0 leak finding)** | ~3 h GPU | blocked on D1 only — **code ready**: `scripts/run_d2_knnvc.sh` (filter → cap → train → post) | severe CER, empty count |
-| D3 | Arm B + F5-TTS subset | D0 pass, D1 pass, **+ locate F5 slot→text off-pod**, + provenance filter | ~3 h GPU | blocked — F5 text **not in this repo either** (searched 2026-07-29); no coverage claim is measurable | severe CER, empty count |
-| D4 | Sequential synth → real re-anneal | D2 or D3 partial | ~4 h GPU | blocked | severe CER vs best of D2/D3 |
-| D5 | TORGO + UASpeech targeted | D1 pass + license | ~3 h GPU | blocked | severe CER, empty count |
+| D2 | Arm B + kNN-VC subset | ~~D1 pass~~ | ~3 h GPU | **needs re-justification** — D1 did not pass; code ready (`scripts/run_d2_knnvc.sh`) but the rationale it inherited is void | severe CER, empty count |
+| D3 | Arm B + F5-TTS subset | ~~D1 pass~~ | ~3 h GPU | **needs re-justification** + F5 text **not in repo or pod** (searched 2026-07-29) | severe CER, empty count |
+| D4 | Sequential synth → real re-anneal | D2 or D3 partial | ~4 h GPU | **needs re-justification** | severe CER vs best of D2/D3 |
+| D5 | TORGO + UASpeech targeted | ~~D1 pass~~ + license | ~3 h GPU | **needs re-justification** | severe CER, empty count |
 | ~~D7~~ | F5 + kNN-VC mixed | — | — | **killed** | known EOS collapse; mechanism = our primary failure mode |
 
 ---
