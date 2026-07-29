@@ -77,7 +77,10 @@ def stage_feat(nemo_model, onnx_model, wavs, tol) -> dict:
     per_file = []
     for w in wavs:
         audio = read_wav(w)
-        ours = onnx_model._raw_to_feats(audio)[0]
+        # the MASKED path the wrapper actually feeds the encoder (NeMo zeroes every frame
+        # at/after seq_len), not the raw extractor
+        onnx_model.reset()
+        ours = onnx_model._extract_features(audio)[0]
         wav_t = torch.from_numpy(audio).unsqueeze(0)
         with torch.inference_mode():
             ref, _ = nemo_model._raw_preprocessor(
@@ -145,20 +148,49 @@ def stage_enc(nemo_model, onnx_model, wavs, tol) -> dict:
     grid = {}
     for drop_policy in ("nemo", "none"):
         for trim_policy in ("nemo", "none"):
-            grid[f"drop={drop_policy},trim={trim_policy}"] = {"frame_mismatch": 0, "max_abs_diff": 0.0}
+            grid[f"drop={drop_policy},trim={trim_policy}"] = {
+                "frame_mismatch": 0,
+                "max_abs_diff": 0.0,           # steps >= 1
+                "first_step_max_abs_diff": 0.0,  # step 0 only (known zero-pad difference)
+            }
+
+    # NeMo's runtime cache layout is LAYER-first while the exported graph is BATCH-first,
+    # so recorded tensors must be permuted before replay (the exporter records the
+    # permutation it used; identity when the two already agree).
+    perm = onnx_model._meta.get("cache_perm", {})
+
+    def to_graph(key, arr):
+        p = perm.get(key)
+        return np.ascontiguousarray(np.transpose(arr, p)) if p and list(p) != sorted(p) else arr
 
     raw_diff = 0.0
+    errors = []
     for i, st in enumerate(steps):
-        ort_out = onnx_model._enc.run(
-            None,
-            {
-                "audio_signal": st["fed"],
-                "length": np.array([st["length"]], dtype=np.int64),
-                "cache_last_channel": st["cache_lc"],
-                "cache_last_time": st["cache_lt"],
-                "cache_last_channel_len": st["cache_ll"],
-            },
-        )
+        fed, length = st["fed"], st["length"]
+        # Step 0: NeMo feeds a bare chunk with drop_extra=0, but the exported graph drops
+        # unconditionally and underflows on it (measured: scripts/probe_parakeet_enc.py).
+        # The wrapper pads the step-0 pre-encode cache with zeros, so replay it that way —
+        # otherwise this stage tests an input the shipped wrapper never produces.
+        if st["drop_extra"] == 0 and onnx_model._first_step_pad:
+            pre = onnx_model._pre_cache_pair[1]
+            fed = np.concatenate(
+                [np.zeros((fed.shape[0], fed.shape[1], pre), dtype=np.float32), fed], axis=-1
+            )
+            length += pre
+        try:
+            ort_out = onnx_model._enc.run(
+                None,
+                {
+                    "audio_signal": np.ascontiguousarray(fed, dtype=np.float32),
+                    "length": np.array([length], dtype=np.int64),
+                    "cache_last_channel": to_graph("cache_last_channel", st["cache_lc"]),
+                    "cache_last_time": to_graph("cache_last_time", st["cache_lt"]),
+                    "cache_last_channel_len": to_graph("cache_last_channel_len", st["cache_ll"]),
+                },
+            )
+        except Exception as exc:  # record and continue: one bad step must not hide the rest
+            errors.append({"step": i, "fed_frames": int(fed.shape[-1]), "error": str(exc).splitlines()[-1][:200]})
+            continue
         named = dict(zip(onnx_model._enc_out_names, ort_out))
         encoded = named.get("outputs", ort_out[0])
         n_enc = int(np.asarray(named.get("encoded_lengths", ort_out[1])).reshape(-1)[0])
@@ -166,11 +198,12 @@ def stage_enc(nemo_model, onnx_model, wavs, tol) -> dict:
         ref_n = st["ref_len"]
 
         is_last = i == len(steps) - 1
+        first = st["drop_extra"] == 0
         for drop_policy in ("nemo", "none"):
             for trim_policy in ("nemo", "none"):
                 onnx_model._drop_policy = drop_policy
                 onnx_model._trim_policy = trim_policy
-                onnx_model._step = st["drop_extra"] and 1 or 0  # emulate step>0 iff NeMo dropped
+                onnx_model._step = 0 if first else 1  # emulate step>0 iff NeMo dropped
                 start, count = onnx_model._encoder_out_window(n_enc, encoded.shape[-1], is_last)
                 key = f"drop={drop_policy},trim={trim_policy}"
                 if count != ref_n:
@@ -179,7 +212,11 @@ def stage_enc(nemo_model, onnx_model, wavs, tol) -> dict:
                 got = encoded[:, :, start : start + count]
                 cmp_n = min(got.shape[-1], ref.shape[-1])
                 d = float(np.abs(got[:, :, :cmp_n] - ref[:, :, :cmp_n]).max()) if cmp_n else float("inf")
-                grid[key]["max_abs_diff"] = max(grid[key]["max_abs_diff"], d)
+                # Step 0 is EXPECTED to differ: NeMo sees no left context there, the graph
+                # sees the zero pad we must feed it. Track it separately so it neither hides
+                # a real regression nor fails the tensor tolerance for a known cause.
+                bucket = "first_step_max_abs_diff" if first else "max_abs_diff"
+                grid[key][bucket] = max(grid[key].get(bucket, 0.0), d)
         cmp_n = min(encoded.shape[-1], ref.shape[-1])
         if cmp_n:
             raw_diff = max(raw_diff, float(np.abs(encoded[:, :, :cmp_n] - ref[:, :, :cmp_n]).max()))
@@ -190,12 +227,18 @@ def stage_enc(nemo_model, onnx_model, wavs, tol) -> dict:
     )
     return {
         "steps": len(steps),
+        "steps_run": len(steps) - len(errors),
+        "step_errors": errors,
         "policy_grid": grid,
         "best_policy": best[0],
         "best": best[1],
         "untrimmed_max_abs_diff": raw_diff,
         "tol": tol,
-        "pass": best[1]["frame_mismatch"] == 0 and best[1]["max_abs_diff"] <= tol,
+        "pass": (
+            not errors
+            and best[1]["frame_mismatch"] == 0
+            and best[1]["max_abs_diff"] <= tol
+        ),
     }
 
 

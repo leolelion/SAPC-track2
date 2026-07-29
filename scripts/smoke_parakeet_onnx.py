@@ -87,13 +87,16 @@ def build_meta() -> dict:
 
 # ---------------------------------------------------------------- mock ORT
 class _MockSession:
+    """Mock ORT session. `inputs` is {name: declared_dims} because model.py validates the
+    meta's cache shapes against the graph's static dims at construction."""
+
     def __init__(self, inputs, outputs, fn):
         self._in = inputs
         self._out = outputs
         self._fn = fn
 
     def get_inputs(self):
-        return [types.SimpleNamespace(name=n) for n in self._in]
+        return [types.SimpleNamespace(name=n, shape=s) for n, s in self._in.items()]
 
     def get_outputs(self):
         return [types.SimpleNamespace(name=n) for n in self._out]
@@ -148,12 +151,26 @@ def install_mock_ort(state):
     def InferenceSession(path, so=None, providers=None):
         if "encoder" in str(path):
             return _MockSession(
-                ["audio_signal", "length", "cache_last_channel", "cache_last_time", "cache_last_channel_len"],
+                {
+                    "audio_signal": ["b", FEAT, "t"],
+                    "length": ["b"],
+                    # batch-first, as NeMo's exporter declares them (its runtime tensors
+                    # are layer-first — the exporter reconciles the two)
+                    "cache_last_channel": ["b", ENC_LAYERS, "c", ENC_DIM],
+                    "cache_last_time": ["b", ENC_LAYERS, ENC_DIM, "t2"],
+                    "cache_last_channel_len": ["b"],
+                },
                 ["outputs", "encoded_lengths", "cache_last_channel_next", "cache_last_time_next", "cache_last_channel_next_len"],
                 enc_fn,
             )
         return _MockSession(
-            ["encoder_outputs", "targets", "target_length", "input_states_1", "input_states_2"],
+            {
+                "encoder_outputs": ["b", ENC_DIM, "t"],
+                "targets": ["b", "u"],
+                "target_length": ["b"],
+                "input_states_1": [PRED_LAYERS, "b", PRED_HID],
+                "input_states_2": [PRED_LAYERS, "b", PRED_HID],
+            },
             ["outputs", "output_states_1", "output_states_2"],
             dec_fn,
         )
@@ -248,8 +265,13 @@ def main() -> int:
     check("callback fired (TTFT driver)", len(partials) > 0)
     check("encoder input width = pre_cache + chunk on later steps",
           state["enc_calls"][1]["t"] == 9 + 16, str(state["enc_calls"][1]))
-    check("encoder input width = chunk only on the first step",
-          state["enc_calls"][0]["t"] == 9, str(state["enc_calls"][0]))
+    # step 0 carries a ZERO pre-encode cache at full width: the exported graph drops
+    # drop_extra unconditionally, so NeMo's bare 9-frame first step underflows (measured
+    # on-pod). 9 zeros + 9 chunk = 18.
+    check("first step pads the pre-encode cache with zeros",
+          state["enc_calls"][0]["t"] == 9 + 9, str(state["enc_calls"][0]))
+    check("first step length counts the zero pad",
+          state["enc_calls"][0]["length"] == 18, str(state["enc_calls"][0]))
 
     final = m.input_finished()
     check("final text non-empty", bool(final))
@@ -332,6 +354,22 @@ def main() -> int:
         check("unimplemented normalisation raises", False)
     except RuntimeError:
         check("unimplemented normalisation raises", True)
+
+    # A meta whose cache layout disagrees with the graph must raise at construction — this
+    # is the real bug the pod hit: NeMo's runtime caches are layer-first, its exported
+    # graph is batch-first, and a wrong order either errors mid-decode or decodes silently
+    # wrong (zero caches are content-symmetric).
+    swapped = build_meta()
+    swapped["cache_last_channel_shape"] = [ENC_LAYERS, 1, LC, ENC_DIM]  # layer-first
+    bad_tree = tmp / "swapped_cache"
+    shutil.copytree(sub, bad_tree)
+    (bad_tree / "weights" / "streaming_meta.json").write_text(json.dumps(swapped), encoding="utf-8")
+    mod3 = load_model_module(bad_tree)
+    try:
+        mod3.Model()
+        check("cache layout disagreeing with the graph raises", False)
+    except RuntimeError as e:
+        check("cache layout disagreeing with the graph raises", "disagrees with the graph" in str(e))
 
     missing = tmp / "no_meta"
     (missing / "weights").mkdir(parents=True)

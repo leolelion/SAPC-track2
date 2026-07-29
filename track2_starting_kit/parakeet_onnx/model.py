@@ -207,6 +207,12 @@ class Model:
             raise RuntimeError(f"encoder.drop_policy={self._drop_policy!r} must be nemo|none")
         if self._trim_policy not in ("nemo", "none"):
             raise RuntimeError(f"encoder.trim_policy={self._trim_policy!r} must be nemo|none")
+        # Step-0 pre-encode cache: zeros (required by the exported graph — see _stream_step)
+        # or NeMo's empty cache (kept only so the probe can reproduce the failure).
+        _fs = _env("SAPC2_FIRST_STEP", enc_cfg.get("first_step_pad", "zeros")).lower()
+        if _fs not in ("zeros", "nemo"):
+            raise RuntimeError(f"encoder.first_step_pad={_fs!r} must be zeros|nemo")
+        self._first_step_pad = _fs == "zeros"
 
         # --- RNN-T decode ---
         # Precedence: env > config.yaml (only if set) > the checkpoint's own decoding cfg
@@ -348,6 +354,30 @@ class Model:
         if len(self._enc_out_names) < 5:
             raise RuntimeError(f"encoder ONNX has {len(self._enc_out_names)} outputs, expected >=5: {self._enc_out_names}")
 
+        # Cache shapes must agree with the graph's STATIC dims. NeMo's runtime cache layout
+        # is layer-first while its exporter declares batch-first, so a meta built from the
+        # wrong side yields either an ORT "invalid dimensions" error mid-decode or, if the
+        # dims happen to line up, a silently wrong decode (zero caches are symmetric).
+        # Fail at construction instead.
+        declared = {i.name: list(i.shape) for i in self._enc.get_inputs()}
+        declared.update({i.name: list(i.shape) for i in self._dec.get_inputs()})
+        want = {
+            "cache_last_channel": self._cache_lc_shape,
+            "cache_last_time": self._cache_lt_shape,
+        }
+        want.update(dict(zip(self._dec_state_in, self._pred_state_shapes)))
+        for name, shape in want.items():
+            dims = declared.get(name)
+            if dims is None:
+                continue
+            if len(dims) != len(shape) or any(
+                isinstance(d, int) and d != s for d, s in zip(dims, shape)
+            ):
+                raise RuntimeError(
+                    f"{name}: streaming_meta.json shape {list(shape)} disagrees with the "
+                    f"graph's declared dims {dims} — re-run scripts/export_parakeet_onnx.py"
+                )
+
     # ------------------------------------------------------------------
     # SAPC2 interface
     # ------------------------------------------------------------------
@@ -417,11 +447,23 @@ class Model:
         return float(min(max(self._gain_target_rms / rms, 1.0), self._gain_cap))
 
     def _raw_to_feats(self, raw: np.ndarray) -> np.ndarray:
+        """UNMASKED log-mel (see LocalMel.__call__): NeMo's tail mask depends on the total
+        sample count, so it is applied once in _extract_features, never inside the cache."""
         torch = self._torch
         wav = torch.from_numpy(np.ascontiguousarray(raw, dtype=np.float32)).unsqueeze(0)
         with torch.inference_mode():
-            feats, _ = self._preproc(input_signal=wav, length=torch.tensor([raw.shape[0]]))
+            feats, _ = self._preproc(input_signal=wav, length=torch.tensor([raw.shape[0]]), mask=False)
         return feats.numpy().astype(np.float32)  # [1, F, T]
+
+    def _apply_tail_mask(self, feats: np.ndarray, n_samples: int) -> np.ndarray:
+        """Zero every frame at/after NeMo's seq_len, as FilterbankFeatures.forward does.
+        Returns a copy so the cached (unmasked) features stay intact."""
+        keep = max(0, min(self._preproc.seq_len(n_samples), feats.shape[-1]))
+        if keep >= feats.shape[-1]:
+            return feats
+        out = feats.copy()
+        out[:, :, keep:] = self._preproc.pad_value
+        return out
 
     def _extract_features(self, raw: np.ndarray) -> np.ndarray:
         """Un-normalised log-mel for the whole raw buffer -> [1, F, T].
@@ -442,7 +484,7 @@ class Model:
             feats = self._raw_to_feats(scaled)
             if self._feat_cache_on:
                 self._feat_cache = feats
-            return feats
+            return self._apply_tail_mask(feats, scaled.shape[0])
 
         HOP, MARGIN, LCTX = self._feat_hop, self._feat_margin, self._feat_lctx
         Tc = self._feat_cache.shape[-1]
@@ -452,7 +494,7 @@ class Model:
         drop = max(0, min(stable - (start // HOP), seg.shape[-1]))
         feats = np.concatenate([self._feat_cache[:, :, :stable], seg[:, :, drop:]], axis=-1)
         self._feat_cache = feats
-        return feats
+        return self._apply_tail_mask(feats, scaled.shape[0])
 
     # ------------------------------------------------------------------
     # Streaming step
@@ -481,7 +523,18 @@ class Model:
 
         zeros_pads = None
         if first:
+            # MEASURED (scripts/probe_parakeet_enc.py, pod 2026-07-29): the exported graph
+            # applies drop_extra_pre_encoded ITSELF and unconditionally. NeMo's step 0 feeds
+            # 9 frames with drop=0, which the graph subsamples to ~2 frames and then drops 2
+            # from -> zero-length sequence -> "Conv ... Invalid input shape: {0}". The graph
+            # has no drop input, so step 0 must instead carry a full-width pre-encode cache
+            # of ZEROS (the convention the Nemotron submission used). Cost: the first ~2
+            # encoder frames see zero left context where NeMo saw none at all (max|Δ| 0.04 on
+            # those frames only; later steps match NeMo to ~1e-6).
+            pre0 = self._pre_cache_pair[1] if self._first_step_pad else self._pre_cache_pair[0]
             cache = feats[:, :, 0:0]
+            if pre0 > 0:
+                zeros_pads = np.zeros((chunk.shape[0], chunk.shape[1], pre0), dtype=np.float32)
         else:
             start = max(0, self._feat_idx - pre_cache)
             cache = feats[:, :, start : self._feat_idx]

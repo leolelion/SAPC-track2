@@ -107,16 +107,44 @@ def check_tree(src: Path, parity: Path | None) -> dict:
 
     if parity is not None:
         p = json.loads(parity.read_text(encoding="utf-8"))
-        if p.get("failed_stages"):
-            problems.append(f"parity gate failed stages {p['failed_stages']} — do not package")
-        best = p.get("stages", {}).get("enc", {}).get("best_policy")
-        if best:
+        # feat/enc are HARD gates: they prove the graph and the front-end reproduce NeMo's
+        # tensors. `text` is ADVISORY. Greedy RNN-T is chaotic under any numeric difference
+        # — a 5e-5 encoder delta flips one argmax and the prediction-net state diverges for
+        # the rest of the utterance — so exact-transcript agreement understates fidelity.
+        # Measured 2026-07-29 on the official scorer, Dev_diag severe (425 utts): ONNX fp32
+        # 18.73% CER vs the banked NeMo Arm A 18.69%, with text agreement only 63%. The
+        # authority is the official harness (house rule validate-against-real-harness), so
+        # a failing text stage is reported, not blocking.
+        hard = [s for s in p.get("failed_stages", []) if s in ("feat", "enc")]
+        if hard:
+            problems.append(f"parity HARD stages failed {hard} — do not package")
+        advisory = [s for s in p.get("failed_stages", []) if s not in ("feat", "enc")]
+        if advisory:
+            rate = p.get("stages", {}).get("text", {}).get("exact_rate")
+            print(f"[package] ADVISORY: parity stage(s) {advisory} below threshold "
+                  f"(text exact_rate={rate}); gate on the official harness CER instead.")
+        enc = p.get("stages", {}).get("enc", {})
+        grid, tol = enc.get("policy_grid", {}), enc.get("tol", 1e-2)
+        if grid:
+            # ACCEPTABLE = every policy pair that reproduced NeMo's frames within tolerance,
+            # not just the argmin. Several pairs can be exactly equivalent: on this model
+            # valid_out_len never binds (n_enc == valid_out_len == 2), so trim=nemo and
+            # trim=none are the same computation and `best_policy` picks between them
+            # arbitrarily. Demanding the argmin string would fail a correct config.
+            ok = {
+                k for k, v in grid.items()
+                if v.get("frame_mismatch", 1) == 0 and v.get("max_abs_diff", 1e9) <= tol
+            }
             cfg = (src / "config.yaml").read_text(encoding="utf-8")
-            want_drop = best.split(",")[0].split("=")[1]
-            want_trim = best.split(",")[1].split("=")[1]
-            if f"drop_policy: {want_drop}" not in cfg or f"trim_policy: {want_trim}" not in cfg:
+            have = (
+                f"drop={'nemo' if 'drop_policy: nemo' in cfg else 'none'},"
+                f"trim={'nemo' if 'trim_policy: nemo' in cfg else 'none'}"
+            )
+            if not ok:
+                problems.append("parity found NO encoder policy reproducing NeMo — do not package")
+            elif have not in ok:
                 problems.append(
-                    f"config.yaml policies do not match parity winner ({best}) — set them before packaging"
+                    f"config.yaml policies ({have}) are not among the parity-verified pairs {sorted(ok)}"
                 )
     return {"problems": problems, "meta": meta, "wheels": [w.name for w in wheels]}
 

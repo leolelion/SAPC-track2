@@ -91,6 +91,18 @@ def preprocessor_meta(model) -> dict:
         "dither_in_ckpt": float(pp.get("dither", 0.0)),
         "pad_to_in_ckpt": int(pp.get("pad_to", 0)),
     }
+
+    # Padding behaviour, read from the FEATURIZER OBJECT rather than the cfg: NeMo pads the
+    # STFT with zeros ("constant", not reflect) and masks every frame at/after
+    # get_seq_len(n) to pad_value. Both are invisible in cfg and both change real output —
+    # reflect padding moves the first frames by ~3.5, and the unmasked tail frame differs
+    # by |log(log_zero_guard)| = 16.6 on every utterance.
+    feat = model.preprocessor.featurizer
+    meta["pad_mode"] = "constant"
+    meta["pad_value"] = float(getattr(feat, "pad_value", 0.0))
+    meta["stft_pad_amount"] = getattr(feat, "stft_pad_amount", None)
+    if getattr(feat, "frame_splicing", 1) != 1:
+        raise RuntimeError(f"frame_splicing={feat.frame_splicing} unsupported")
     return meta
 
 
@@ -135,6 +147,48 @@ def dump_tokens(model, weights: Path) -> int:
     lines.append(f"<blk> {blank_id}")
     (weights / "tokens.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return blank_id
+
+
+def align_to_graph(name: str, runtime_shape: list[int], graph_dims: list) -> list[int]:
+    """Return the runtime cache shape expressed in the EXPORTED GRAPH's dim order.
+
+    NeMo's runtime and NeMo's exporter do not agree on cache layout: at runtime
+    `get_initial_cache_state(batch_size=1)` returns LAYER-first tensors ([17,1,70,512]),
+    while the exported graph declares BATCH-first ([dyn,17,dyn,512]). Feeding the runtime
+    order to ORT fails with "invalid dimensions"; worse, a wrong-but-accepted order would
+    decode silently wrong, because zero-filled caches are content-symmetric.
+
+    Rule: keep the identity order if it satisfies every STATIC graph dim; otherwise take
+    the unique permutation that does, with batch (size 1) at dim 0. Ambiguity raises —
+    never pick one and hope.
+    """
+    import itertools
+
+    static = {i: int(d) for i, d in enumerate(graph_dims) if isinstance(d, int)}
+
+    def ok(shape):
+        return all(shape[i] == v for i, v in static.items())
+
+    if len(runtime_shape) != len(graph_dims):
+        raise RuntimeError(f"{name}: rank {len(runtime_shape)} != graph rank {len(graph_dims)}")
+    if ok(runtime_shape):
+        return list(runtime_shape), list(range(len(runtime_shape)))
+    # search over index permutations (not value permutations — dims can repeat)
+    cands = {
+        perm
+        for perm in itertools.permutations(range(len(runtime_shape)))
+        if ok([runtime_shape[i] for i in perm]) and runtime_shape[perm[0]] == 1
+    }
+    shapes = {tuple(runtime_shape[i] for i in p) for p in cands}
+    if len(shapes) != 1:
+        raise RuntimeError(
+            f"{name}: cannot align runtime shape {runtime_shape} to graph dims {graph_dims} "
+            f"({len(shapes)} candidate orders: {sorted(shapes)})"
+        )
+    perm = sorted(cands)[0]
+    aligned = [runtime_shape[i] for i in perm]
+    print(f"[export] {name}: runtime {runtime_shape} -> graph order {aligned} (perm {list(perm)})")
+    return aligned, list(perm)
 
 
 def streaming_meta(model) -> dict:
@@ -261,9 +315,11 @@ def main() -> None:
         "blank_id": blank_id,
         "vocab_size": blank_id + 1,
         "max_symbols_per_step": int(greedy_cfg.get("max_symbols", 10) or 10),
-        "cache_last_channel_shape": list(cache_lc.shape),
-        "cache_last_time_shape": list(cache_lt.shape),
-        "cache_last_channel_len_shape": list(cache_ll.shape),
+        "runtime_cache_shapes": {  # NeMo's own order, kept for the record / parity replay
+            "cache_last_channel": list(cache_lc.shape),
+            "cache_last_time": list(cache_lt.shape),
+            "cache_last_channel_len": list(cache_ll.shape),
+        },
         "pred_state_shapes": [list(s.shape) for s in pred_states],
         "preprocessor": pp_meta,
     }
@@ -288,6 +344,25 @@ def main() -> None:
             "inputs": [{"name": i.name, "shape": list(i.shape), "type": i.type} for i in sess.get_inputs()],
             "outputs": [{"name": o.name, "shape": list(o.shape), "type": o.type} for o in sess.get_outputs()],
         }
+
+    # Cache shapes are recorded in the GRAPH's dim order, not NeMo's runtime order — the
+    # two disagree (see align_to_graph). model.py allocates from these, so they must match
+    # what the session will accept.
+    enc_dims = {i["name"]: i["shape"] for i in meta["encoder_io"]["inputs"]}
+    dec_dims = {i["name"]: i["shape"] for i in meta["decoder_io"]["inputs"]}
+    rt = meta["runtime_cache_shapes"]
+    perms = {}
+    for key in ("cache_last_channel", "cache_last_time", "cache_last_channel_len"):
+        meta[f"{key}_shape"], perms[key] = align_to_graph(key, rt[key], enc_dims[key])
+    state_names = sorted(n for n in dec_dims if n.startswith("input_states_"))
+    aligned_states = []
+    for name, shape in zip(state_names, meta["pred_state_shapes"]):
+        shp, perm = align_to_graph(name, shape, dec_dims[name])
+        aligned_states.append(shp)
+        perms[name] = perm
+    meta["pred_state_shapes"] = aligned_states
+    # Permutations parity needs to replay NeMo-recorded tensors through ORT.
+    meta["cache_perm"] = perms
 
     (weights / "streaming_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"[export] wrote {out}")

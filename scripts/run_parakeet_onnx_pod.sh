@@ -132,11 +132,12 @@ if has offline; then
   python3 -c "import onnxruntime" 2>/dev/null && { echo "venv already has ort — test is not proving anything"; exit 1; }
   env http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 HF_HUB_OFFLINE=1 \
       bash "$WORK/extract/setup.sh" 2>&1 | tee "$ART/offline_setup.log"
+  # 20-utt smoke manifest (built here so the stage has no external prerequisite)
+  head -21 "$DATA/manifest/Dev_diag.csv" > "$ART/Dev_smoke.csv"
   env http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 HF_HUB_OFFLINE=1 \
       python3 "$REPO/track2_starting_kit/local_decode.py" \
       --submission-dir "$WORK/extract" \
-      --manifest-csv "$DATA/manifest/Dev_smoke.csv" \
-      --streaming-manifest-csv "$DATA/manifest/Dev_smoke_streaming.csv" \
+      --manifest-csv "$ART/Dev_smoke.csv" \
       --streaming-interval 0 --data-root "$DATA" \
       --out-csv "$ART/offline_smoke.csv" --out-partial-json "$ART/offline_smoke.json" \
       2>&1 | tee "$ART/offline_decode.log"
@@ -173,10 +174,11 @@ fi
 if has gate_acc; then
   step "accuracy gates on the extracted zip"
   for SPLIT in Dev_diag Dev_clean2k; do
+    # no --streaming-manifest-csv: local_decode falls back to --manifest-csv, and these
+    # slices have no *_streaming.csv (latency is scored on Dev_streaming, in gate_lat)
     python3 "$REPO/track2_starting_kit/local_decode.py" \
       --submission-dir "$WORK/extract" \
       --manifest-csv "$DATA/manifest/$SPLIT.csv" \
-      --streaming-manifest-csv "$DATA/manifest/${SPLIT}_streaming.csv" \
       --streaming-interval 0 --data-root "$DATA" \
       --out-csv "$ART/$SPLIT.predict.csv" --out-partial-json "$ART/$SPLIT.partial.json" \
       2>&1 | tee "$ART/decode_$SPLIT.log"

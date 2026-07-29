@@ -21,17 +21,22 @@ runtime:
   num_threads: 1
 
 encoder:
-  # How much of NeMo's post-encoder trimming the wrapper must redo. NeMo applies
-  # `drop_extra_pre_encoded` in cache_aware_stream_step and `valid_out_len` in
-  # streaming_post_process — both OUTSIDE encoder.forward, which is what got exported.
-  # Whether the exported graph already applies either is an empirical fact about NeMo's
-  # exporter. scripts/parity_parakeet_onnx.py sweeps this 2x2 grid against NeMo
-  # reference tensors; the winner is written here BEFORE packaging.
-  #   nemo — redo the trim in the wrapper (assumes the graph did not)
-  #   none — trust the graph
-  # >>> SET BY PARITY <<< do not ship the defaults unverified.
-  drop_policy: nemo
-  trim_policy: nemo
+  # MEASURED on-pod 2026-07-29 (scripts/probe_parakeet_enc.py, Arm A export, 16 steps):
+  # the exported graph applies BOTH `drop_extra_pre_encoded` and `valid_out_len` itself —
+  # every later step returned exactly NeMo's post-drop frame count with max|Δ| ~1e-6. So
+  # the wrapper must NOT redo either trim; doing so silently deletes real encoder frames.
+  #   nemo — redo the trim in the wrapper (correct only if the graph does not)
+  #   none — trust the graph  <-- what this export requires
+  drop_policy: none
+  trim_policy: none
+
+  # Step 0 has no prior frames, but the graph's drop is unconditional, so feeding NeMo's
+  # 9-frame first step underflows to a zero-length sequence (ORT: "Conv ... Invalid input
+  # shape: {0}"). Step 0 therefore carries a full-width pre-encode cache of ZEROS — the
+  # same convention the Nemotron submission that scored used.
+  #   zeros — pad the step-0 pre-encode cache to full width  <-- required
+  #   nemo  — empty step-0 cache (reproduces the failure; kept for probing only)
+  first_step_pad: zeros
 
 decoding:
   # Greedy RNN-T (the low-latency path; matches the banked Arm A measurement).

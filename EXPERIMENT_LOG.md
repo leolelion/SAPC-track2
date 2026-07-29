@@ -378,3 +378,57 @@ that leaned on a Val2k number is measuring those 7 speakers, not the Dev distrib
 - **Next**: re-measure zipformer beam-4 on Dev_diag severe officially (done: 22.48%); fe06 killed to free
   CPU — its CER premise is falsified by l0 and its remaining rationale is **latency** (TTFT p50 630 ms),
   which is worth a rung later but not ahead of establishing which model is actually ahead.
+
+## exp_parakeet_onnx_ship — Arm A exported to ONNX and gated for Codabench
+- **Status**: gates green except Dev_clean2k (running) — 2026-07-29, pod 1ppb7l0i5xuna8.
+  Q chose Option 2 (ONNX export) over bundling the NeMo wheel tree: every submission that ever scored
+  for us ran ONNX under onnxruntime, no NeMo submission ever has.
+- **Checkpoint identity trap (caught before export)**: `track2_starting_kit/parakeet_realtime_ft/weights/
+  parakeet_realtime.nemo` on the pod is **Arm B l0** (md5 cdf2dd9f), not Arm A (md5 f2cc2cc7 =
+  `parakeet_ft/armA_full/ft_smoke_encoder_only.nemo`). Exporting from the submission dir would have
+  shipped the joint-unfreeze arm, and parity would have passed anyway (both sides wrong; the two arms
+  differ by 0.05 CER pts). Arm A is now linked into `/workspace/parakeet_ref_armA/`.
+- **Four bugs found by the gates, all of the silently-wrong class**:
+  1. **Cache layout.** NeMo's runtime `get_initial_cache_state` is LAYER-first `[17,1,70,512]`; the
+     exported graph declares BATCH-first `[1,17,70,512]`. The exporter now aligns runtime tensors to the
+     graph's static dims (unique permutation, batch at dim 0, ambiguity raises) and `model.py` re-checks
+     the meta against the session at construction.
+  2. **Step 0.** The graph applies `drop_extra_pre_encoded` ITSELF and unconditionally, so NeMo's bare
+     9-frame first step underflows to a zero-length sequence (`Conv ... Invalid input shape: {0}`).
+     Step 0 now carries a full-width pre-encode cache of zeros (the Nemotron convention).
+  3. **Mel pad mode.** NeMo's `FilterbankFeatures.stft` pads with `constant`, not `reflect` (our localmel
+     inherited reflect from the Nemotron one) — worth ~3.5 log-mel units on the first frames.
+  4. **Mel tail mask.** NeMo masks every frame at/after `get_seq_len(n) = floor(n/hop)` to `pad_value`;
+     with `center=True` that is always the final column, so an unmasked front-end differs by
+     |log(log_zero_guard)| = 16.6 on the last frame of EVERY utterance. Cache stays unmasked; the mask is
+     applied on the way out so it cannot freeze a zeroed column mid-utterance.
+- **Encoder trim policy — MEASURED, not reasoned** (`scripts/probe_parakeet_enc.py`): graph does its own
+  `drop_extra` and `valid_out_len`. `drop=nemo` gives 983/1013 frame mismatches; `drop=none` gives 0 with
+  max|Δ| **5.17e-05**. Shipped config: `drop_policy=none, trim_policy=none`.
+- **Parity vs the NeMo Arm A wrapper** (30 utts, 6 per etiology from Dev_diag):
+  feat max|Δ| 8.9e-04 ✅ · enc 0 frame mismatches / 5.2e-05 ✅ · **text only 19/30 exact (63%)**.
+  The text gate was a proxy of my own invention and it is the WRONG metric: greedy RNN-T is chaotic
+  under any numeric difference (one flipped argmax diverges the prediction-net state for the rest of the
+  utterance), and the disagreements run in both directions. Superseded by the official scorer below;
+  `package_parakeet_onnx.py` now treats feat/enc as hard gates and text as advisory, with the reason and
+  these numbers written into the code.
+- **Official scorer (`evaluate.sh`, min-over-two-refs), Dev_diag severe n=425:**
+  | build | CER | WER |
+  |---|---|---|
+  | banked Arm A (NeMo) | 18.69 | 24.97 |
+  | ONNX fp32 | **18.73** | 25.05 |
+  | ONNX int8 (ship candidate) | **18.93** | 25.17 |
+  int8 costs 0.20 CER pts for 537 MB -> 264 MB. Still 3.55 pts better than zipformer beam-4 (22.48).
+- **Latency (int8, threads=1, Dev_streaming, real-time paced): TTFT p50 628 ms / TTLT p50 70 ms ->
+  mean 349 ms** (banked NeMo Arm A 356 ms; board best 592 ms; our shipped zipformer ~730 ms). The
+  pre-registered rule picks the lowest thread count meeting <=420 ms, so threads=1 ships — which is also
+  what the 15000 s wall-clock budget wants. No 2/4 sweep needed.
+- **Offline validity (the recurring cause of submission death)**: `pip --no-index` into an empty target
+  under DEAD PROXIES installs from the bundled wheels ✅; the extracted zip then decodes 17/20 non-empty
+  with dead proxies + `HF_HUB_OFFLINE=1` ✅. numpy scare resolved empirically: ort 1.28 needs
+  `numpy>=1.21.6`, satisfied by the runtime's 1.26.3, so the bundled numpy 2.4.6 wheel is never installed
+  over it (`deps ready: ort 1.28.0 | numpy 1.26.3 | torch 2.4.1+cu124`). It only appeared when installing
+  into an EMPTY dir.
+- **Artifact**: `parakeet_armA_int8.zip`, 264 MB, sha256 `851d326c7bd6b6af7e44abbc77fb33d22711f1b230c258f0998206b1a35da6d6`.
+- **Next**: Dev_clean2k int8 (gate <=15%, banked 13.51%) is the last criterion; then copy artifacts back
+  and stop the pod. NOT YET SUBMITTED.
