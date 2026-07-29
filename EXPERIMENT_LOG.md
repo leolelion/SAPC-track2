@@ -352,6 +352,24 @@ the house rules that proxies never authorize a ship claim — the unwritten half
 become baselines either.** Caught only because l0's "11-point win" was too large to believe and the control
 was one rescore of an existing CSV away.
 
-- **Next**: re-measure zipformer beam-4 on Dev_diag severe officially (running); fe06 continues, but its
-  remaining rationale is **latency** (TTFT p50 630 ms), not CER — the unfreeze result undercuts the
-  confident-blank story that motivated raising λ.
+### Dev_clean2k — a comparison slice neither model selected against
+
+`val.json` spans only **7 speakers** across its 2000 utts, and `Val2k` is those same 2000 utts, so Val2k
+is 100% contaminated for every parakeet arm (checkpoint selection ran on it) and is a narrow basis besides.
+Dev_diag overlaps val.json by only 33/425 (7.8%), which is why the severe comparison above is trustworthy.
+
+Built `Dev_clean2k.csv` on the pod: **2000 utts, 122 speakers** (≤17 per speaker), disjoint from *both*
+`val.json` and `Dev_diag`, spanning all five etiologies (PD 570 · CP 471 · ALS 455 · Down 319 · Stroke 185).
+
+| model | CER | WER | empties |
+|---|---|---|---|
+| zipformer beam-4 | **18.19%** | 24.27% | 20/2000 (1.0%) |
+| parakeet Arm A | *(decoding)* | | |
+
+**Val2k is retired as a benchmark.** Same zipformer, same official scorer, both 2000 Dev utts:
+Val2k **29.78%** vs Dev_clean2k **18.19%**. An 11.6-pt swing from the speaker draw alone. Any conclusion
+that leaned on a Val2k number is measuring those 7 speakers, not the Dev distribution.
+
+- **Next**: re-measure zipformer beam-4 on Dev_diag severe officially (done: 22.48%); fe06 killed to free
+  CPU — its CER premise is falsified by l0 and its remaining rationale is **latency** (TTFT p50 630 ms),
+  which is worth a rung later but not ahead of establishing which model is actually ahead.
