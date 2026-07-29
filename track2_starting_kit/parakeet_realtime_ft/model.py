@@ -57,46 +57,67 @@ _DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 _CONFIG = OmegaConf.load(_DIR / "config.yaml")
 
 
+def _cgroup_cpu_quota():
+    """Container CPU quota in cores, or None if unlimited/unreadable. Split out so the
+    thread policy can be unit-tested on a box without NeMo (scripts/test_thread_policy.py)."""
+    try:
+        if os.path.exists("/sys/fs/cgroup/cpu.max"):                  # cgroup v2
+            parts = open("/sys/fs/cgroup/cpu.max").read().split()
+            if parts and parts[0] != "max":
+                return float(parts[0]) / float(parts[1])
+        elif os.path.exists("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"):   # cgroup v1
+            quota = int(open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read())
+            period = int(open("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read())
+            if quota > 0:
+                return quota / period
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_threads(quota, nproc, env=None, config=None):
+    """Pick intra-op torch threads. The cgroup quota is a CEILING, not a target.
+
+    Two topologies run this same file and want opposite values:
+
+      accuracy pass  — the organizers' ingestion runs ~20 worker PROCESSES, each loading
+        its own Model, on a 24-vCPU worker (confirmed from our submission's
+        CPU_DIAGNOSTIC). Threads multiply by 20, so sizing to the quota (24) means 480
+        threads on 24 vCPU. Measured under this exact topology (exp_nemotron_speed_002,
+        20 workers / 20 CPUs): threads=1 wall RTF 0.029 (34.2x) vs threads=4 wall RTF
+        0.123 (8.15x) — 4.2x the wall clock for byte-identical transcripts (40/40 hash
+        audit). Wall clock is what the 15000 s/submission budget measures.
+
+      streaming pass — local_decode.py is single-process (one AudioSender + one Decoder
+        thread). No contention, so more threads cut per-chunk compute, i.e. TTFT. The
+        banked 638 ms TTFT was measured with the old quota-sized cap.
+
+    We cannot distinguish the passes at __init__ (both just construct Model), so this is
+    one knob with a chosen default. Default = 1: a blown time budget scores zero, a
+    slightly worse TTFT costs a few ms on one Pareto axis.
+
+    >>> VERIFY-ON-POD <<< sweep SAPC2_THREADS=1/2/4 on the STREAMING pass. If per-chunk
+    compute at 1 thread exceeds the 100 ms chunk period the stream falls behind real time
+    and TTFT/TTLT blow up, forcing a higher default plus a wall-clock recheck.
+    """
+    env = os.environ if env is None else env
+    config = _CONFIG if config is None else config
+    rt = config.get("runtime", {}) or {}
+    want = int(env.get("SAPC2_THREADS", rt.get("num_threads", 1)))
+    nproc = max(1, int(nproc or 1))
+    ceiling = int(quota) if (quota and quota >= 1) else nproc
+    return max(1, min(want, ceiling, nproc)), want, ceiling
+
+
 class Model:
     """Cache-aware streaming ASR (parakeet_realtime 120M). See VERIFICATION STATUS above."""
 
-    def __init__(self):
-        # Lazy imports keep this file import-safe on a box without NeMo/torch,
-        # so the contract/buffering/strip logic can be inspected and import-checked locally.
-        import torch
-
-        # Cap intra-op threads to the cgroup CPU quota. Some hosts expose a huge nproc
-        # (e.g. 128) but a small CPU quota (e.g. 13.6); left alone, torch spawns nproc
-        # threads and oversubscribes the quota, inflating per-chunk compute — and thus the
-        # measured streaming TTFT — several-fold. Verified 2026-07-25: this artifact made
-        # local_decode TTFT look ~1.7s when true per-chunk compute is ~26ms (3-4x real-time
-        # headroom). No-op on a host whose quota == nproc (e.g. a dedicated 24-core worker).
-        try:
-            import os as _os
-            _q = None
-            if _os.path.exists("/sys/fs/cgroup/cpu.max"):            # cgroup v2
-                _p = open("/sys/fs/cgroup/cpu.max").read().split()
-                if _p and _p[0] != "max":
-                    _q = float(_p[0]) / float(_p[1])
-            elif _os.path.exists("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"):  # cgroup v1
-                _quota = int(open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read())
-                _period = int(open("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read())
-                if _quota > 0:
-                    _q = _quota / _period
-            if _q and _q >= 1:
-                torch.set_num_threads(max(1, min(int(_q), _os.cpu_count() or 1)))
-            try:
-                torch.set_num_interop_threads(1)
-            except Exception:
-                pass  # already initialized in this process
-            print(f"[parakeet_ft] torch threads={torch.get_num_threads()} (cgroup quota={_q})")
-        except Exception as _e:
-            print(f"[parakeet_ft] thread-cap skipped: {_e}")
-
-        import nemo.collections.asr as nemo_asr
-
-        self._torch = torch
-        self._device = torch.device("cpu")  # Track 2 = CPU-only
+    def _init_runtime_cfg(self):
+        """Set every config/env-derived attribute. NeMo-free and torch-free on purpose:
+        __init__ calls it, and so does the contract smoke (which bypasses __init__ because
+        NeMo is absent locally). Keep ALL such attributes here — when the smoke duplicated
+        this list by hand it silently rotted, and the 5-method contract went three commits
+        untested while the input-gain and feature-cache attributes were added."""
         self._partial_callback = None
 
         # Output normalization: strip <EOU>/special tokens the model emits (research/46:
@@ -105,9 +126,9 @@ class Model:
         self._strip_special = bool(out_cfg.get("strip_special_tokens", True))
         self._special_re = re.compile(str(out_cfg.get("special_token_pattern", r"<[^>]+>")))
 
-        # Causal frozen-scalar input gain (fixes severe-tail empties; see config.yaml
-        # input_gain + exp_parakeet_ft_empties). Env overrides win over config so the
-        # pod can A/B and sweep without editing code. Precompute the linear target/cap/floor.
+        # Causal frozen-scalar input gain (see config.yaml input_gain +
+        # exp_parakeet_ft_empties). Env overrides win over config so the pod can A/B and
+        # sweep without editing code. Precompute the linear target/cap/floor.
         ig = _CONFIG.get("input_gain", {}) or {}
         _env = os.environ.get
         self._gain_on = _env("SAPC2_INPUT_GAIN", "on" if ig.get("enabled", True) else "off").lower() != "off"
@@ -125,9 +146,37 @@ class Model:
         # budget risk on full Test). With the input gain frozen per file, scaled audio is
         # deterministic, so already-computed frames are STABLE and can be cached; only the
         # growing tail (last few frames touch the STFT boundary) is recomputed, with left
-        # context, each call. Numerically-gated on-pod (equiv vs full extraction) before trust.
+        # context, each call. Verified on-pod byte-identical vs full extraction.
         # Env-toggle for A/B + fallback: SAPC2_FEAT_CACHE=on(default)|off.
         self._feat_cache_on = _env("SAPC2_FEAT_CACHE", "on").lower() != "off"
+
+    def __init__(self):
+        # Lazy imports keep this file import-safe on a box without NeMo/torch,
+        # so the contract/buffering/strip logic can be inspected and import-checked locally.
+        import torch
+
+        # Intra-op thread policy. See _resolve_threads() for the full rationale and the
+        # 20-worker measurement it is derived from.
+        try:
+            _q = _cgroup_cpu_quota()
+            _n, _want, _ceil = _resolve_threads(_q, os.cpu_count())
+            torch.set_num_threads(_n)
+            try:
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass  # already initialized in this process
+            print(
+                f"[parakeet_ft] torch threads={torch.get_num_threads()} "
+                f"(requested={_want} ceiling={_ceil} cgroup_quota={_q} nproc={os.cpu_count()})"
+            )
+        except Exception as _e:
+            print(f"[parakeet_ft] thread policy skipped: {_e}")
+
+        import nemo.collections.asr as nemo_asr
+
+        self._torch = torch
+        self._device = torch.device("cpu")  # Track 2 = CPU-only
+        self._init_runtime_cfg()
 
         nemo_path = _DIR / _CONFIG.weights.nemo_file
         print(f"[parakeet_ft] loading {nemo_path} (CPU) …")

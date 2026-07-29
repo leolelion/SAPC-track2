@@ -167,6 +167,39 @@ memory `small-model-sweep-verdict`.
   + base for Arm B compare/beam/int8), `adalora_full/ft_adalora.nemo` (disposable), `gate.sh`, `ttft_probe.py`,
   gate outputs. Code committed: `b921f9f`, `7d28427` (main, unpushed).
 
+## Current State Update (parakeet ship prep — 2026-07-29)
+Arm A is the ship candidate and already passes the pre-registered win condition on the OFFICIAL
+scorer: severe CER **18.69%** / Dev_clean2k **13.51%** / mean(TTFT,TTLT) **356 ms** — beating the
+shipped beam-4 zipformer (22.48 / 18.19 / ~611) on all three. Board's best latency is 592 ms, so
+356 ms is a non-dominated corner. Full plan: `investigations/parakeet_ship_runbook.md`.
+
+- ✅ **Thread policy fixed** (`parakeet_realtime_ft/model.py`). It sized torch threads to the cgroup
+  quota, which is a NO-OP on the 24-vCPU eval worker (quota == nproc) — so each of ~20 ingestion
+  worker processes would take 24 threads = 480 threads on 24 vCPU. `exp_nemotron_speed_002` measured
+  threads=1 at **4.2x** the wall-clock throughput of threads=4 under exactly this topology, with
+  byte-identical transcripts. Quota is now a CEILING; value from `SAPC2_THREADS` env →
+  `config.yaml runtime.num_threads` → default 1. Gated by `scripts/test_thread_policy.py` (8/8).
+- ✅ **Contract smoke repaired** — it had been broken since the input-gain commit, so the 5-method
+  interface went three commits with no local gate. Root causes fixed, not patched: config/env setup
+  extracted to `_init_runtime_cfg()` (called by `__init__` AND the smoke, so the attribute list can
+  no longer rot), and the mock rebuilt NeMo-shaped so the smoke drives the real `_setup_streaming()`.
+  Now 28/28 incl. feature-cache on/off bit-equivalence, negative-controlled (bad `_feat_margin` 0/1
+  caught; 2/3/4 all geometrically correct and agree).
+- ⛔ **BLOCKER, and it is a Q decision:** parakeet has NEVER been packaged for Codabench.
+  `parakeet_realtime_ft/setup.sh` installs `nemo_toolkit[asr]` from PyPI and pulls the checkpoint from
+  HuggingFace — two network calls. Memory `submission-offline-packaging` records network-dependent
+  setup.sh as the project's recurring submission-death cause; but the organizers' own baseline
+  setup.sh fetches wheels from huggingface.co, implying network IS reachable. Unresolved. What is not
+  in doubt: **every submission we have ever successfully scored (A1 greedy, beam-4, Nemotron int8) ran
+  ONNX via sherpa-onnx/onnxruntime — none ran NeMo.** Fork: (1) bundle the NeMo wheel tree and install
+  `--no-index`, or (2) export encoder/prediction-net/joiner to ONNX and rewrite `model.py` against
+  onnxruntime (the path with all our precedent; `h7-fix-plan` already showed our Nemotron export was
+  faithful). The pod work differs completely between the two — **do not start a pod until Q picks.**
+- ➡️ **Next gate:** Q picks bundle-vs-export. Then one pod session: thread sweep (1/2/4, keep the
+  lowest that holds mean latency ≤ 420 ms) → wall-clock budget check → full gate on the EXTRACTED
+  zip. Pre-registered ship criterion in the runbook; submit IFF all four numbers hold.
+
+
 ---
 
 ## Phase 0 — Foundation & contracts  *(DONE)*

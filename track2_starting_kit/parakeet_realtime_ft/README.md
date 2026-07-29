@@ -3,11 +3,24 @@
 Fine-tuned deploy target for `parakeet_realtime` (120M) cache-aware streaming ASR.
 Plan: `research/47_parakeet_realtime_120m_finetune_plan.md`. Rationale: `research/46` §6–§7.
 
-## Status (Stage 0 — local prep, no pod spend)
-- **Deploy wrapper (`model.py`) VERIFIED LOCALLY**: 5-method contract, 100 ms→model-chunk
-  buffering, callback firing, reset semantics, `<EOU>`/special-token stripping, text extraction.
-  Checks: `python3 -m py_compile model.py`, NeMo-absent `import`, and
-  `scripts/smoke_parakeet_ft_wrapper.py` (mock-model contract smoke).
+## Status (2026-07-29 — Arm A banked and gate-passing; NOT yet packaged, see blocker)
+Ship runbook + the packaging decision Q must make: `investigations/parakeet_ship_runbook.md`.
+Arm A on the official scorer: severe CER **18.69%**, Dev_clean2k **13.51%**, mean latency **356 ms**
+— beats the shipped zipformer on all three.
+
+- **Deploy wrapper (`model.py`) VERIFIED LOCALLY**: 5-method contract, 100 ms→feature-frame
+  buffering + cache-aware feeding kwargs, callback firing, reset semantics, `<EOU>`/special-token
+  stripping, text extraction, feature-cache on/off bit-equivalence, thread policy.
+  Checks: `python3 -m py_compile model.py`, NeMo-absent `import`,
+  `scripts/smoke_parakeet_ft_wrapper.py` (28/28), `scripts/test_thread_policy.py` (8/8).
+- ⚠️ **The smoke was silently broken from the input-gain commit until 2026-07-29** — it duplicated
+  `__init__`'s attribute list by hand and predated the feature-frame rewrite, so the contract went
+  three commits ungated. Config/env setup now lives in `_init_runtime_cfg()`, which BOTH `__init__`
+  and the smoke call. **Add new config attributes there, never inline in `__init__`**, or the smoke
+  rots again the same way.
+- ⛔ **NOT PACKAGED. `setup.sh` is network-dependent** (`pip install nemo_toolkit[asr]` from PyPI +
+  `from_pretrained` from HuggingFace). Every submission we have ever successfully scored ran ONNX
+  via sherpa-onnx/onnxruntime; none ran NeMo. Bundle-vs-export is an open Q decision — runbook §2.
 - **UNVERIFIED — needs pod** (marked `# >>> VERIFY-ON-POD <<<` in code/config):
   1. exact `from_pretrained` id + model class (RNNT vs TDT) — `config.weights.model_name`.
   2. NeMo streaming-param setup + `conformer_stream_step` return tuple (the Nemotron break point).

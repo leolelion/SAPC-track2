@@ -12,6 +12,17 @@
 audio:
   sample_rate: 16000              # 16 kHz mono; harness delivers 1600-sample / 100 ms chunks
 
+runtime:
+  # Intra-op torch threads PER PROCESS. The eval worker is 24 vCPU / 226 GiB and the
+  # organizers' accuracy pass runs ~20 worker processes on it, so threads multiply by 20.
+  # Measured under that exact topology (exp_nemotron_speed_002): threads=1 was 4.2x faster
+  # wall-clock than threads=4, with byte-identical transcripts. Wall clock is the 15000 s
+  # budget. The cgroup quota is applied as a CEILING on top of this value, never as the
+  # target. Override per-run with SAPC2_THREADS (env wins over this file).
+  # >>> VERIFY-ON-POD <<< sweep 1/2/4 on the STREAMING pass: if per-chunk compute at 1
+  # thread exceeds 100 ms the stream falls behind real time and TTFT/TTLT regress.
+  num_threads: 1
+
 weights:
   # >>> VERIFY-ON-POD <<< exact NGC/HF id. The sweep (research/46 §6) used the
   # EOU variant `parakeet_realtime_eou_120m` (the 31.8% number). Confirm the
