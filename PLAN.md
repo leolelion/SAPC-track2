@@ -202,6 +202,42 @@ shipped beam-4 zipformer (22.48 / 18.19 / ~611) on all three. Board's best laten
 
 ---
 
+## Current State Update (decode levers exhausted — 2026-07-30)
+
+**Full detail in `SESSION_HANDOFF.md`. Read that first when picking this up cold.**
+
+Shipped and scored: parakeet Arm A ONNX fp32 greedy, **Test1 CER 19.01% / 416.9 ms, on the Pareto
+frontier**, owning the low-latency corner. Nothing was submitted today.
+
+Three things were measured through the official scorer for the first time:
+
+1. **The error budget.** Deletions are **13.04 of 18.73 CER pts**; empties are only **3.89**. And
+   `3780 char-del / 760 word-del = 4.97 chars` against a 4.91-char mean word — the model drops ~13%
+   of reference words **whole**. Coverage failure, not phonetic.
+2. **CER tracks speaking RATE, not length.** spearman −0.254 vs rate, **+0.027 vs word count**; rate
+   Q1 40.14% vs Q4 10.31% (4×); inside the 13+ bucket slow 19.76% vs fast 9.19%.
+   *This corrects the earlier "51% of error mass is 13+ word utts" reading — that is a **mass**
+   statistic, not a difficulty one.* **The axis is slow speech, not long speech.**
+3. **Deletions are positionally flat** (62.7% singleton runs) → prediction-net drift and
+   within-utterance left-context exhaustion are both **falsified**.
+
+**Decode-time levers on the CER axis are now exhausted** — blank penalty (NO-GO), RNN-T beam search
+(**falsified: every width worse, `dDel` positive for all**), `input_gain` (0/48), joint unfreeze
+(D1). Four independent attacks.
+
+The beam result is the informative one: greedy has no score and never pays for blank, while a
+correctly-scored beam does, and RNN-T path probability is biased toward short output. Searching
+harder found **higher-probability paths that are worse transcripts**. So **the posterior is
+miscalibrated toward blank**, and no decode-time search fixes that. Phase 4 (streaming/decode tuning,
+no retraining) is effectively closed for CER; it remains open for latency only.
+
+**Next, in order:** (a) time-compress slow audio before the front end — untried, cheap, attacks the
+rate gradient directly rather than the search; (b) the GPU session, now with a correctly identified
+target: augment/sample toward **slow** speech, resume the un-converged Arm B curve, sweep FastEmit λ,
+top-k checkpoint averaging, speaker-disjoint val. This reframes D2–D5.
+
+---
+
 ## Phase 0 — Foundation & contracts  *(DONE)*
 Goal: understand and lock the evaluation pipeline so nothing downstream breaks it.
 - [x] Map repo, read interface + accuracy + latency + manifest code.
