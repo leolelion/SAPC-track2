@@ -39,7 +39,8 @@ DATA=${DATA:?set DATA to the SAP data root (must contain manifest/)}
 WORK=${WORK:-/workspace/parakeet_onnx}
 ART=${ART:-/workspace/artifacts/blank_penalty}
 EXTRACT=${EXTRACT:-$WORK/extract}          # the EXTRACTED shipped zip, not the build dir
-GATEPY=${GATEPY:-$WORK/offlinevenv/bin/python}
+GATEPY=${GATEPY:-$WORK/offlinevenv/bin/python}   # decode/probe: must be the SHIPPED runtime
+DECOMPPY=${DECOMPPY:-python3}                     # scoring/analysis: the interpreter evaluate.sh uses
 ORT_VERSION=${ORT_VERSION:-1.27.0}
 # Provisional. The `probe` stage measures the real blank-margin distribution and prints
 # the grid to use; replace this with what it says. A synthetic-audio probe on 2026-07-30
@@ -64,9 +65,34 @@ GATE_ORT=$("$GATEPY" -c "import onnxruntime;print(onnxruntime.__version__)")
 [[ "$GATE_ORT" == "$ORT_VERSION" ]] || {
   echo "preflight: interpreter has ort $GATE_ORT but the shipped bundle pins $ORT_VERSION — refusing"; exit 1; }
 [[ -f "$EXTRACT/model.py" ]] || { echo "preflight: $EXTRACT/model.py missing"; exit 1; }
-grep -q "SAPC2_BLANK_PENALTY" "$EXTRACT/model.py" || {
-  echo "preflight: the extracted model.py has no blank-penalty hook — re-package before sweeping"; exit 1; }
+if has probe || has decode_grid || has decode_final || has latency; then
+  grep -q "SAPC2_BLANK_PENALTY" "$EXTRACT/model.py" || {
+    echo "preflight: the extracted model.py has no blank-penalty hook — copy the patched wrapper in"; exit 1; }
+fi
 echo "[preflight] $GATEPY ort=$GATE_ORT · artifact=$EXTRACT · grid='$GRID'"
+
+# --------------------------------------------------------------- S0 on banked hypotheses
+# The decomposition needs no decode: any hypothesis CSV we already have can be pushed
+# through stage 2 to regenerate the SGML, then decomposed. Minutes, not hours. Point
+# BANKED_CSV at the predictions from the artifact that actually scored on Test1.
+if has decomp_banked; then
+  : "${BANKED_CSV:?set BANKED_CSV to a banked hypothesis CSV}"
+  BANKED_SPLIT=${BANKED_SPLIT:-Dev_diag}
+  BANKED_TAG=${BANKED_TAG:-banked}
+  step "S0: rescore + decompose $BANKED_CSV on $BANKED_SPLIT"
+  ( cd "$REPO" && ./evaluate.sh --split "$BANKED_SPLIT" --hyp-csv "$BANKED_CSV" \
+      --start_stage 2 --stop_stage 2 ) 2>&1 | tee "$ART/eval_${BANKED_SPLIT}.${BANKED_TAG}.log"
+  for R in ref1 ref2; do
+    cp "$DATA/eval/sctk/$BANKED_SPLIT.$R.sgml" "$ART/$BANKED_SPLIT.$BANKED_TAG.$R.sgml"
+  done
+  "$DECOMPPY" "$REPO/scripts/error_decomposition.py" \
+    --sgml-ref1 "$ART/$BANKED_SPLIT.$BANKED_TAG.ref1.sgml" \
+    --sgml-ref2 "$ART/$BANKED_SPLIT.$BANKED_TAG.ref2.sgml" \
+    --manifest-csv "$DATA/manifest/$BANKED_SPLIT.csv" \
+    --hyp-csv "$BANKED_CSV" \
+    --out-json "$ART/decomp_${BANKED_SPLIT}.${BANKED_TAG}.json" \
+    2>&1 | tee "$ART/decomp_${BANKED_SPLIT}.${BANKED_TAG}.log"
+fi
 
 # --------------------------------------------------------------- probe
 # Minutes, and it can kill the whole sweep before it costs anything. Two questions:
@@ -125,7 +151,7 @@ if has score_grid; then
     for R in ref1 ref2; do
       cp "$DATA/eval/sctk/$GRID_SPLIT.$R.sgml" "$ART/$GRID_SPLIT.$T.$R.sgml"
     done
-    "$GATEPY" "$REPO/scripts/error_decomposition.py" \
+    "$DECOMPPY" "$REPO/scripts/error_decomposition.py" \
       --sgml-ref1 "$ART/$GRID_SPLIT.$T.ref1.sgml" \
       --sgml-ref2 "$ART/$GRID_SPLIT.$T.ref2.sgml" \
       --manifest-csv "$DATA/manifest/$GRID_SPLIT.csv" \
@@ -193,7 +219,7 @@ if has score_final; then
     for R in ref1 ref2; do
       cp "$DATA/eval/sctk/$FINAL_SPLIT.$R.sgml" "$ART/$FINAL_SPLIT.$T.$R.sgml"
     done
-    "$GATEPY" "$REPO/scripts/error_decomposition.py" \
+    "$DECOMPPY" "$REPO/scripts/error_decomposition.py" \
       --sgml-ref1 "$ART/$FINAL_SPLIT.$T.ref1.sgml" \
       --sgml-ref2 "$ART/$FINAL_SPLIT.$T.ref2.sgml" \
       --manifest-csv "$DATA/manifest/$FINAL_SPLIT.csv" \
