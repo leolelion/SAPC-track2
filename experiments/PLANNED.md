@@ -67,6 +67,8 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 |---|---|---|---|---|---|
 | **S0** | Official-scorer error decomposition | CPU pod (data lives there) | ~0, minutes | **done 2026-07-30** → `EXPERIMENT_LOG.md` `exp_s0_s1_probe` | empties = **3.89** CER pts (not 11.29); deletions **13.04** of 18.73; **51% of error mass is 13+ word utts** |
 | **S1** | Blank-penalty probe + sweep | S0 shares the session | 11 min spent of ~4.5 h budgeted | **NO-GO 2026-07-30, grid not run** | empties are MORE confidently blank (p10 margin 6.35 vs 2.61); β≈6 needed, flips 27% of all blanks |
+| **S2a** | Deletion localization (position / runs / rate) | S0 alignments; no decode | ~0, minutes | **ready** — `investigations/step02_runbook.md` | position histogram + run lengths + spearman(CER, rate vs word count) → names M1/M2/M3 |
+| **S2c** | RNN-T beam grid on the shipped fp32 artifact | S2a must not read M3 | ~3 h CPU pod ≈ $9 | **ready, gated** | Dev_diag CER ≤ 18.43 (B1) or ≤ 17.73 at ≤1000 ms (B2); hard DQ at proj. wall-clock > 12000 s |
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
 | **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **done 2026-07-29 — FALSIFIED** → `EXPERIMENT_LOG.md` `exp_armB_parakeet` | severe CER 18.69% → **18.74%** (worse), empties **48 → 50** |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |
@@ -101,7 +103,31 @@ would have produced a false negative. On-pod it also answers the go/no-go: if th
 margins are *higher* than ordinary blanks, no constant shift separates them and the decode-time line
 closes in minutes rather than a session.
 
-**Kill.** Probe NO-GO, or no β satisfies the pre-registered rule → keep `blank_penalty: 0.0`, and the
+### S2 — the target the decomposition actually pointed at
+**Added 2026-07-30, after S0/S1 landed.** S1's NO-GO closed the *empty tail*. S0 opened something
+bigger and different: `3780 char deletions / 760 word deletions = 4.97 chars each` against a
+**4.91-char mean reference word** — the deletions are **whole words**, ~13% of the reference, and the
+words the model does emit are ~2 chars off. That is a **coverage** failure inside long non-empty
+output, not a phonetic one, and not the empty tail.
+
+Two candidate mechanisms were killed locally for free first: `max_symbols_per_step` (resolves to 10;
+slow speech has a low symbol/frame rate, so it never binds) and the `input_finished` tail drop (real,
+but bounded at ~80 ms by the subsampling scale — a footnote, not 760 words).
+
+**S2a** separates the three that remain — M1 duration mismatch (fixed left context in FRAMES vs 2–4x
+slower speech), M2 blank prior (blank won 92.86% of probe steps), M3 prediction-net drift — using
+statistics computed from alignments the CER **already** came from. No decode, no GPU, no new data.
+It is what decides whether the next spend is a cheap re-export, a decode change, or a GPU session.
+
+**S2c** is the decode change: a time-synchronous RNN-T beam, plus `beam_length_norm: mean` for the
+short-output bias that *is* our failure mode. It is the mechanically correct form of the pressure the
+blank penalty applied by brute force. Ships `beam: 1` = byte-identical greedy; a `parity` stage proves
+that on-pod before anything else runs.
+
+**Kill.** S2a reads M3 (rising positions + long runs) → a beam cannot fix state drift; do not spend
+the grid. Or no config clears B1/B2 → keep `beam: 1`, report the curve, submit nothing.
+
+**Kill (S1).** Probe NO-GO, or no β satisfies the pre-registered rule → keep `blank_penalty: 0.0`, and the
 next spend is the GPU session (resume the un-converged Arm B curve × FastEmit λ sweep × top-k
 checkpoint averaging × a speaker-disjoint val), not more decode-time tuning.
 

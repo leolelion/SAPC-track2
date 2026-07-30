@@ -56,6 +56,44 @@ decoding:
   # Env SAPC2_BLANK_PENALTY overrides.
   blank_penalty: 0.0
 
+  # --- RNN-T beam search -------------------------------------------------------
+  # 1 = greedy = the decode path of the submission that scored Test1 CER 19.01%,
+  # byte-identical (beam=1 never constructs a hypothesis object).
+  #
+  # Motivation, from the official decomposition (exp_s0_s1_probe, Dev_diag n=425):
+  # 3780 of 5430 char errors are deletions, and 3780 char-deletions / 760 word-deletions
+  # = 4.97 chars each against a 4.91-char mean reference word. The model omits ~13% of
+  # reference words WHOLE; the words it does emit are ~2 chars off. That is a coverage
+  # failure, not a phonetic one. Greedy takes blank at a frame and can never revisit it.
+  # A beam keeps the emitting continuation alive so later frames can pay for it.
+  #
+  # COSTS LATENCY AND WALL CLOCK. Up to (beam_max_symbols + 1) * beam decoder runs per
+  # encoder frame. The encoder is untouched, so the multiplier on end-to-end time is far
+  # below `beam`, but TTFT/TTLT and the 15000 s budget are both scored: measure both
+  # passes, never ship a beam value on an accuracy number alone.
+  beam: 1
+
+  # Max token emissions per encoder frame inside the beam (greedy's own guard is
+  # max_symbols_per_step above; this one is separate because the beam pays `beam` decoder
+  # runs per depth). 1 is the cheap setting and is likely sufficient on slow dysarthric
+  # speech; 2 is the safe default.
+  beam_max_symbols: 2
+
+  # Non-blank continuations considered per hypothesis per depth. 0 = use `beam`. Widening
+  # costs no extra decoder runs (one run returns the whole vocab row) — it only enlarges
+  # the pool the top-`beam` prune selects from.
+  beam_expand: 0
+
+  # Drop candidates more than this far below the best in the same pool (log-prob units).
+  beam_prune_logp: -12.0
+
+  # Final ranking only. RNN-T beams are biased toward SHORT output because each extra
+  # token multiplies in another probability < 1 — which is precisely our failure mode, so
+  # this is on-target and must be swept rather than assumed.
+  #   none — raw path log-prob
+  #   mean — path log-prob / number of emitted tokens
+  beam_length_norm: none
+
 output:
   # parakeet_realtime emits <EOU>; research/46 saw it on 100/123 sweep hyps. Strip
   # special tokens in the wrapper — NEVER in the scorer (house rule), and never emit

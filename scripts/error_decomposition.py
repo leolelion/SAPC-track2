@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import re
 import sys
@@ -164,6 +165,92 @@ def sclite_csdi(ops: Sequence[Op]) -> Dict[str, int]:
 
 
 # ------------------------------------------------------------ edit alignment
+def _dp_table(a: List, b: List) -> List[List[int]]:
+    """d[i][j] = Levenshtein distance between a[:i] and b[:j].
+
+    Shared by `seq_align` (counts) and `seq_align_trace` (positions) so the two can never
+    disagree about the alignment. Gate B re-derives the official CER/WER from `seq_align`
+    on every run, so any damage here is caught before a number is printed."""
+    n, m = len(a), len(b)
+    d = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        d[i][0] = i
+    for j in range(1, m + 1):
+        d[0][j] = j
+    for i in range(1, n + 1):
+        ai = a[i - 1]
+        di, dprev = d[i], d[i - 1]
+        for j in range(1, m + 1):
+            cost = 0 if ai == b[j - 1] else 1
+            di[j] = min(dprev[j] + 1, di[j - 1] + 1, dprev[j - 1] + cost)
+    return d
+
+
+def seq_align_trace(a: Sequence, b: Sequence) -> List[Tuple[str, int]]:
+    """Same alignment as `seq_align`, but returns the ORDERED op list with the reference
+    index each op sits at: [(op, j), ...] in increasing j, where op is C/S/D and j indexes
+    `b`. Insertions are omitted -- they have no reference position, which is the whole
+    point of asking WHERE the reference was dropped.
+
+    Tie-breaking follows `seq_align` exactly (diagonal, then insertion, then deletion), so
+    the two functions describe one alignment, not two."""
+    a, b = list(a), list(b)
+    d = _dp_table(a, b)
+    i, j = len(a), len(b)
+    trace: List[Tuple[str, int]] = []
+    while i > 0 or j > 0:
+        if i > 0 and j > 0:
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            if d[i][j] == d[i - 1][j - 1] + cost:
+                trace.append(("C" if cost == 0 else "S", j - 1))
+                i, j = i - 1, j - 1
+                continue
+        if i > 0 and d[i][j] == d[i - 1][j] + 1:
+            i -= 1  # insertion: no reference position
+            continue
+        if j > 0 and d[i][j] == d[i][j - 1] + 1:
+            trace.append(("D", j - 1))
+            j -= 1
+            continue
+        raise AssertionError("backtrace fell off the DP table")
+    trace.reverse()
+    return trace
+
+
+def deletion_profile(hyp: str, ref: str) -> Dict[str, object]:
+    """Where in the reference the dropped words sit, and whether they cluster.
+
+    Two statistics, chosen because they separate the three live mechanisms for the
+    deletion mass measured in exp_s0_s1_probe:
+
+      position  -- normalised reference index of each deleted word. RISING with position
+                   implicates a mechanism that degrades over time within an utterance
+                   (exhausted encoder left context, or prediction-network drift after the
+                   first drop). FLAT implicates a per-frame blank prior that has nothing
+                   to do with position.
+      run length -- consecutive deleted words. LONG RUNS mean the model stopped emitting
+                   for a stretch (drift / state collapse). SINGLETONS mean it is skipping
+                   individual words (a per-word prior, e.g. function words).
+    """
+    ref_words = ref.split()
+    trace = seq_align_trace(hyp.split(), ref_words)
+    n = len(ref_words)
+    dels = [j for op, j in trace if op == "D"]
+    runs: List[int] = []
+    prev = None
+    for j in dels:
+        if prev is not None and j == prev + 1:
+            runs[-1] += 1
+        else:
+            runs.append(1)
+        prev = j
+    return {
+        "n_ref_words": n,
+        "del_positions": [(j + 0.5) / n for j in dels] if n else [],
+        "del_runs": runs,
+    }
+
+
 def seq_align(a: Sequence, b: Sequence) -> Tuple[int, Dict[str, int]]:
     """Levenshtein distance with backtrace. a = hypothesis, b = reference.
 
@@ -176,19 +263,8 @@ def seq_align(a: Sequence, b: Sequence) -> Tuple[int, Dict[str, int]]:
     hyp counterpart (the model dropped it) and I = a hyp element with no ref counterpart.
     """
     a, b = list(a), list(b)
+    d = _dp_table(a, b)
     n, m = len(a), len(b)
-    # d[i][j] = distance between a[:i] and b[:j]
-    d = [[0] * (m + 1) for _ in range(n + 1)]
-    for i in range(1, n + 1):
-        d[i][0] = i
-    for j in range(1, m + 1):
-        d[0][j] = j
-    for i in range(1, n + 1):
-        ai = a[i - 1]
-        di, dprev = d[i], d[i - 1]
-        for j in range(1, m + 1):
-            cost = 0 if ai == b[j - 1] else 1
-            di[j] = min(dprev[j] + 1, di[j - 1] + 1, dprev[j - 1] + cost)
 
     counts = Counter()
     i, j = n, m
@@ -300,6 +376,180 @@ def summarize(records: List[dict], key: str, total_err: float, total_ref: float)
         )
     rows.sort(key=lambda r: -r["cer_points"])
     return rows
+
+
+# ------------------------------------------------- deletion localization (S2)
+def _ranks(xs: List[float]) -> List[float]:
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    r = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        avg = (i + j) / 2.0 + 1.0  # midrank for ties
+        for k in range(i, j + 1):
+            r[order[k]] = avg
+        i = j + 1
+    return r
+
+
+def spearman(xs: List[float], ys: List[float]) -> Optional[float]:
+    """Rank correlation, no scipy. Rank-based on purpose: CER is bounded and clipped and
+    duration is long-tailed, so a Pearson correlation on the raw values would be reporting
+    the outliers rather than the relationship."""
+    if len(xs) < 3:
+        return None
+    rx, ry = _ranks(xs), _ranks(ys)
+    n = len(rx)
+    mx, my = sum(rx) / n, sum(ry) / n
+    num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    dx = math.sqrt(sum((a - mx) ** 2 for a in rx))
+    dy = math.sqrt(sum((b - my) ** 2 for b in ry))
+    return (num / (dx * dy)) if dx and dy else None
+
+
+def _quartile_bins(records: List[dict], key_fn, labels=("Q1", "Q2", "Q3", "Q4")):
+    vals = sorted(key_fn(r) for r in records)
+    if len(vals) < 4:
+        return None
+    cuts = [vals[int(len(vals) * q)] for q in (0.25, 0.5, 0.75)]
+    out = {lab: [] for lab in labels}
+    for r in records:
+        v = key_fn(r)
+        idx = 0 if v < cuts[0] else 1 if v < cuts[1] else 2 if v < cuts[2] else 3
+        out[labels[idx]].append(r)
+    return out, cuts
+
+
+def report_deletion_localization(records: List[dict], tot_ref: float) -> dict:
+    """Separate the three live mechanisms for the deletion mass. Prints tables and
+    returns the same numbers for the JSON. Costs no decode -- it is a second reading of
+    the alignments the CER already came from."""
+    res: dict = {}
+
+    # Empty hypotheses delete every reference word by construction, so their positions are
+    # uniform whatever the mechanism is. Including them would flatten the histogram and
+    # hide the signal. Non-empty, >= 4 reference words, is the population that can inform.
+    pop = [r for r in records if not r["hyp_empty"] and r["n_ref_words_align"] >= 4]
+    all_pos = [p for r in pop for p in r["del_positions"]]
+
+    print("\n=== Step 2a: WHERE the deletions are ===")
+    print(f"population: {len(pop)} non-empty utterances with >= 4 reference words "
+          f"({len(all_pos)} deleted words)")
+    if not all_pos:
+        print("  no deletions in this population -- nothing to localise")
+        return res
+
+    def pos_hist(positions, title):
+        edges = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        counts = [0] * 5
+        for p in positions:
+            k = min(4, int(p * 5))
+            counts[k] += 1
+        tot = float(len(positions))
+        print(f"\n  {title} (n={int(tot)})")
+        print("    " + "".join(f"{int(edges[i]*100):>3}-{int(edges[i+1]*100):<3}%" for i in range(5)))
+        print("    " + "".join(f"{100.0*c/tot:>7.1f}" for c in counts))
+        return counts
+
+    res["position_hist_all"] = pos_hist(all_pos, "deleted-word position within the reference")
+    long_pop = [r for r in pop if r["word_bucket"] == "13+"]
+    long_pos = [p for r in long_pop for p in r["del_positions"]]
+    if long_pos:
+        res["position_hist_13plus"] = pos_hist(long_pos, "same, 13+ word utterances only")
+    print("\n  RISING left-to-right => a within-utterance degradation (exhausted encoder")
+    print("  left context, or prediction-net drift after the first drop). FLAT => a")
+    print("  per-frame blank prior that does not care where in the utterance it is.")
+
+    # ---- run lengths ----
+    runs = [x for r in pop for x in r["del_runs"]]
+    if runs:
+        buckets = {"1": 0, "2": 0, "3": 0, "4-6": 0, "7+": 0}
+        words_in_long = 0
+        for x in runs:
+            key = str(x) if x <= 3 else ("4-6" if x <= 6 else "7+")
+            buckets[key] += 1
+            if x >= 3:
+                words_in_long += x
+        n_runs = len(runs)
+        n_words = sum(runs)
+        print("\n=== Step 2b: are the deletions CLUSTERED? ===")
+        print(f"  {n_runs} runs covering {n_words} deleted words")
+        for k, v in buckets.items():
+            print(f"    run length {k:<4}: {v:>5} runs ({100.0*v/n_runs:5.1f}%)")
+        print(f"  deleted words sitting in runs of 3+: {words_in_long}/{n_words} "
+              f"({100.0*words_in_long/n_words:.1f}%)")
+        print("  LONG RUNS => the model stopped emitting for a stretch (drift/collapse).")
+        print("  SINGLETONS => it is skipping individual words (a per-word prior).")
+        res["run_buckets"] = buckets
+        res["run_words_total"] = n_words
+        res["run_words_in_3plus"] = words_in_long
+
+    # ---- duration vs rate ----
+    timed = [r for r in records if r.get("duration_f")]
+    if len(timed) >= 8:
+        print("\n=== Step 2c: duration vs speaking RATE ===")
+        print("  Dysarthric speech decouples the two: an utterance can be long in seconds")
+        print("  and short in words. Whichever one CER tracks names the mechanism.")
+        for r in timed:
+            r["rate_cps"] = r["ref_chars"] / r["duration_f"] if r["duration_f"] else 0.0
+        cers = [r["cer"] for r in timed]
+        res["spearman"] = {
+            "cer_vs_duration": spearman(cers, [r["duration_f"] for r in timed]),
+            "cer_vs_rate_cps": spearman(cers, [r["rate_cps"] for r in timed]),
+            "cer_vs_ref_words": spearman(cers, [float(r["ref_words"]) for r in timed]),
+        }
+        for k, v in res["spearman"].items():
+            print(f"  spearman {k:<22}: {'n/a' if v is None else f'{v:+.3f}'}")
+
+        for name, fn in (("duration (s)", lambda r: r["duration_f"]),
+                         ("rate (ref chars/s)", lambda r: r["rate_cps"])):
+            binned = _quartile_bins(timed, fn)
+            if not binned:
+                continue
+            bins, cuts = binned
+            print(f"\n  by {name} quartile (cuts {', '.join(f'{c:.2f}' for c in cuts)}):")
+            print(f"    {'bin':<5}{'n':>5}{'ref_ch':>9}{'CER%':>8}{'worddel%':>10}{'empty':>7}")
+            tbl = {}
+            for lab, rows in bins.items():
+                if not rows:
+                    continue
+                rc = sum(r["ref_chars"] for r in rows)
+                er = sum(r["errors"] for r in rows)
+                wd = sum(r["word_ops"]["D"] for r in rows)
+                wr = sum(r["ref_words"] for r in rows)
+                em = sum(1 for r in rows if r["hyp_empty"])
+                tbl[lab] = {"n": len(rows), "ref_chars": rc, "cer": er / rc if rc else 0.0,
+                            "word_del_rate": wd / wr if wr else 0.0, "empty": em}
+                print(f"    {lab:<5}{len(rows):>5}{rc:>9.0f}{100.0*tbl[lab]['cer']:>8.2f}"
+                      f"{100.0*tbl[lab]['word_del_rate']:>10.2f}{em:>7}")
+            res[f"quartiles_{name.split()[0]}"] = tbl
+
+        # Decorrelation: hold length roughly constant, split by rate. If CER still moves,
+        # rate is doing work that word count is not.
+        longs = [r for r in timed if r["word_bucket"] == "13+"]
+        if len(longs) >= 8:
+            med = sorted(r["rate_cps"] for r in longs)[len(longs) // 2]
+            slow = [r for r in longs if r["rate_cps"] < med]
+            fast = [r for r in longs if r["rate_cps"] >= med]
+            if not slow or not fast:
+                # Degenerate split (rate is constant across the bucket). Say so rather
+                # than print a CER for an empty half.
+                print(f"\n  within the 13+ word bucket only (n={len(longs)}): rate does not "
+                      f"vary (median {med:.2f}) -- no split possible")
+            else:
+                print(f"\n  within the 13+ word bucket only (n={len(longs)}), "
+                      f"split at rate {med:.2f}:")
+                half = {}
+                for lab, rows in (("slow", slow), ("fast", fast)):
+                    rc = sum(r["ref_chars"] for r in rows)
+                    er = sum(r["errors"] for r in rows)
+                    half[lab] = {"n": len(rows), "cer": er / rc if rc else None}
+                    print(f"    {lab:<5} n={len(rows):<4} CER {100.0*er/rc:6.2f}%")
+                res["long_bucket_rate_split"] = half
+                print("  A gap here is M1 (duration mismatch) with utterance length held fixed.")
+    return res
 
 
 # --------------------------------------------------------------------- main
@@ -430,6 +680,11 @@ def main() -> None:
         else:
             w_err, w_ref, wops = 0.5 * (wed1 + wed2), 0.5 * (wlen1 + wlen2), wops1
 
+        # Localise the deletions on whichever reference WER selected, so the positions
+        # describe the same alignment the word-op counts above came from.
+        w_hyp_txt, w_ref_txt = (hyp2, ref2) if wpick == "ref2" else (hyp1, ref1)
+        prof = deletion_profile(w_hyp_txt, w_ref_txt)
+
         tot_err += err
         tot_ref += ref_chars
         tot_werr += w_err
@@ -450,6 +705,9 @@ def main() -> None:
             "char_ops": cops,
             "word_ops": wops,
             "sclite_word_ops": sclite_csdi(ops),
+            "del_positions": prof["del_positions"],
+            "del_runs": prof["del_runs"],
+            "n_ref_words_align": prof["n_ref_words"],
             "ref_text": ref_txt,
             "hyp_text": hyp_txt,
         }
@@ -459,6 +717,13 @@ def main() -> None:
             rec["speaker"] = m.get("speaker", "")
             rec["etiology"] = m.get("etiology", "")
             rec["duration"] = m.get("duration", "")
+            # Parsed separately and explicitly: a missing or unparseable duration must
+            # drop the utterance out of the timing analysis, never silently become 0.0.
+            try:
+                dur = float(rec["duration"])
+            except (TypeError, ValueError):
+                dur = None
+            rec["duration_f"] = dur if (dur is not None and dur > 0) else None
             if raw_hyp:
                 rec["raw_hyp"] = raw_hyp.get(rec["id"], "")
         records.append(rec)
@@ -513,6 +778,8 @@ def main() -> None:
         agg[key] = rows
         print_slice_table(title, rows if key != "speaker" else rows[:15], tot_err)
 
+    localization = report_deletion_localization(records, tot_ref)
+
     worst = sorted(records, key=lambda r: -r["errors"])[: args.top_n]
     print(f"\n--- top {len(worst)} individual contributors ---")
     for r in worst:
@@ -548,6 +815,7 @@ def main() -> None:
             "ids": [r.get("id") for r in empties] if manifest else None,
         },
         "slices": agg,
+        "deletion_localization": localization,
         "per_utterance": records,
     }
     with open(args.out_json, "w", encoding="utf-8") as f:

@@ -164,6 +164,39 @@ def _detokenize(tokens, vocab):
     return "".join(pieces).replace("▁", " ").strip()
 
 
+def _log_softmax(z):
+    """Stable log-softmax over a 1-D float array. The joint emits UNNORMALISED logits;
+    greedy can argmax them directly, but a beam compares scores ACROSS hypotheses and
+    across time, so they must be on a common (normalised) scale."""
+    m = float(z.max())
+    s = z - m
+    return s - float(np.log(np.exp(s).sum()))
+
+
+class _BeamHyp:
+    """One live RNN-T hypothesis. Immutable by convention: expansions build new objects
+    so a parent hypothesis can be extended by several tokens in the same step without
+    any of them sharing mutable state.
+
+    `state` is the prediction-network state tuple, `last_token` the [[t]] int32 array the
+    decoder graph consumes next. Both follow the greedy path's convention exactly (see
+    _decode_frames): on an emission the state becomes the OUTPUT of the run that consumed
+    the PREVIOUS last_token, and last_token becomes the newly emitted one."""
+
+    __slots__ = ("score", "tokens", "state", "last_token")
+
+    def __init__(self, score, tokens, state, last_token):
+        self.score = score            # path log-prob, blank steps included
+        self.tokens = tokens          # tuple of emitted token ids
+        self.state = state            # tuple of np arrays
+        self.last_token = last_token  # np.int32 [[t]]
+
+    def ranked(self, length_norm):
+        if length_norm == "mean":
+            return self.score / max(1, len(self.tokens))
+        return self.score
+
+
 # =====================================================================
 # Section 3: Model
 # =====================================================================
@@ -240,6 +273,49 @@ class Model:
         self._blank_penalty = float(
             _env("SAPC2_BLANK_PENALTY", dec_cfg.get("blank_penalty", 0.0) or 0.0)
         )
+
+        # --- RNN-T beam search. SHIPS beam=1 = the greedy path of the submission that
+        # scored Test1 CER 19.01%, byte-identical (beam=1 dispatches to _decode_frames
+        # and never constructs a hypothesis object).
+        #
+        # Why it exists: the official decomposition (exp_s0_s1_probe, Dev_diag n=425)
+        # says 3780 of 5430 char errors are DELETIONS, and 3780/760 word-deletions =
+        # 4.97 chars each against a 4.91-char mean word — i.e. the model omits ~13% of
+        # reference words WHOLE. Greedy commits to blank at every frame and can never
+        # revisit; a beam keeps the non-blank continuation alive and lets later frames
+        # pay for it. That is the mechanically correct form of the counter-pressure the
+        # blank penalty applies by brute force (and the probe showed a constant shift
+        # cannot separate the populations it would need to).
+        #
+        # Search is time-synchronous (TSD): per encoder frame, expand each live
+        # hypothesis, route the blank continuation to the finished set, keep the top
+        # `beam` non-blank continuations, repeat up to `beam_max_symbols` times.
+        # Cost is bounded by beam * beam_max_symbols decoder runs per frame; the
+        # ENCODER, which dominates wall clock, is untouched. Latency is therefore not
+        # free but is far cheaper than the beam number suggests -- MEASURE IT, the
+        # 15000 s budget and TTFT/TTLT are both live constraints.
+        self._beam = max(1, int(_env("SAPC2_BEAM", dec_cfg.get("beam", 1) or 1)))
+        self._beam_max_symbols = int(
+            _env("SAPC2_BEAM_MAX_SYMBOLS", dec_cfg.get("beam_max_symbols", 2) or 2)
+        )
+        # Expansions considered per hypothesis per symbol step. Wider costs nothing in
+        # decoder runs (one run yields the whole vocab row); it only widens the pool the
+        # top-`beam` prune selects from.
+        self._beam_expand = int(_env("SAPC2_BEAM_EXPAND", dec_cfg.get("beam_expand", 0) or 0)) \
+            or self._beam
+        # Drop any candidate more than this far below the best candidate in the same
+        # pool (log-prob units). Guards the worst case when the joint is near-uniform.
+        self._beam_prune_logp = float(
+            _env("SAPC2_BEAM_PRUNE_LOGP", dec_cfg.get("beam_prune_logp", -12.0))
+        )
+        # Length normalisation of the FINAL ranking. RNN-T beams are biased toward short
+        # output because every extra token multiplies in another <1 probability -- which
+        # is exactly our failure mode, so this is on-target and must be swept, not
+        # assumed. none = raw path log-prob; mean = log-prob / max(1, n_tokens).
+        _ln = str(_env("SAPC2_BEAM_LENGTH_NORM", dec_cfg.get("beam_length_norm", "none"))).lower()
+        if _ln not in ("none", "mean"):
+            raise RuntimeError(f"decoding.beam_length_norm={_ln!r} must be none|mean")
+        self._beam_length_norm = _ln
 
         # --- output normalisation: strip <EOU> and friends (research/46: 100/123 sweep
         # hyps carried <EOU>). Never emit a special token to the scorer. ---
@@ -332,6 +408,8 @@ class Model:
             f"trim_policy={self._trim_policy} blank={self._blank_id} "
             f"max_symbols={self._max_symbols} vocab={len(self._vocab)} "
             f"blank_penalty={self._blank_penalty} "
+            f"beam={self._beam} beam_max_symbols={self._beam_max_symbols} "
+            f"beam_expand={self._beam_expand} beam_length_norm={self._beam_length_norm} "
             f"input_gain={'on' if self._gain_on else 'off'})",
             flush=True,
         )
@@ -417,6 +495,13 @@ class Model:
         self._dec_states = [np.zeros(s, dtype=np.float32) for s in self._pred_state_shapes]
         self._last_token = np.array([[self._blank_id]], dtype=np.int32)
         self._target_length = np.array([1], dtype=np.int32)
+        # Beam state lives alongside the greedy state, never instead of it: at beam=1
+        # this stays None and _stream_step dispatches to the untouched greedy path.
+        self._beam_hyps = (
+            [_BeamHyp(0.0, (), tuple(self._dec_states), self._last_token)]
+            if self._beam > 1
+            else None
+        )
 
     def accept_chunk(self, audio_chunk: np.ndarray) -> str:
         """Accumulate 100 ms of raw audio; run one model step per newly complete
@@ -591,7 +676,10 @@ class Model:
                 self._cache_lt = val
 
         start_f, n_frames = self._encoder_out_window(n_enc, encoded.shape[-1], is_last)
-        self._decode_frames(encoded, start_f, n_frames)
+        if self._beam > 1:
+            self._decode_frames_beam(encoded, start_f, n_frames)
+        else:
+            self._decode_frames(encoded, start_f, n_frames)
 
         self._feat_idx += shift_size
         self._step += 1
@@ -652,3 +740,118 @@ class Model:
                 self._dec_states = [out[n] for n in self._dec_state_out]
         if self._tokens:
             self._hyp_text = _detokenize(self._tokens, self._vocab)
+
+    # ------------------------------------------------------------------
+    # Beam search (only reachable when decoding.beam > 1)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _logaddexp(a: float, b: float) -> float:
+        if a < b:
+            a, b = b, a
+        return a + math.log1p(math.exp(b - a))
+
+    def _prune(self, hyps, k, merge=False):
+        """Top-`k` by path log-prob, with an absolute floor relative to the best.
+
+        `merge` recombines hypotheses that carry the SAME label sequence via different
+        blank/emit alignments. RNN-T assigns a label sequence the SUM of its alignment
+        probabilities, so their scores log-add rather than compete. The surviving object
+        keeps the dominant alignment's prediction state: the state is a function of the
+        emitted tokens alone, so the two should be identical anyway -- but this graph
+        fuses the prediction net and the joint, so the state output is produced by a run
+        that also saw an encoder frame, and we do not assume it is encoder-independent."""
+        if merge:
+            best = {}
+            for h in hyps:
+                cur = best.get(h.tokens)
+                if cur is None:
+                    best[h.tokens] = h
+                elif h.score > cur.score:
+                    h.score = self._logaddexp(h.score, cur.score)
+                    best[h.tokens] = h
+                else:
+                    cur.score = self._logaddexp(cur.score, h.score)
+            hyps = list(best.values())
+        hyps.sort(key=lambda h: h.score, reverse=True)
+        hyps = hyps[:k]
+        if hyps and self._beam_prune_logp < 0:
+            floor = hyps[0].score + self._beam_prune_logp
+            hyps = [h for h in hyps if h.score >= floor]
+        return hyps
+
+    def _decode_frames_beam(self, encoded: np.ndarray, start: int, count: int) -> None:
+        """Time-synchronous RNN-T beam over `count` encoder frames.
+
+        Per frame, each live hypothesis is expanded once per symbol depth. Its BLANK
+        continuation retires to `done` (blank is what advances time in RNN-T, and the
+        prediction state does NOT advance on a blank); its top non-blank continuations
+        advance the prediction state and stay live for the next depth. Depth
+        `beam_max_symbols` is a blank-only pass, so every hypothesis that reaches `done`
+        has paid for its blank and its score is a valid path log-prob -- no hypothesis is
+        carried across the frame boundary on an unpriced alignment.
+
+        Worst case (beam_max_symbols + 1) * beam decoder runs per frame against greedy's
+        typical ~1. The encoder is untouched and dominates wall clock, but this is the
+        term that can break the 15000 s budget: measure, never assume."""
+        blank = self._blank_id
+        for f in range(start, start + count):
+            enc_frame = encoded[:, :, f : f + 1]
+            live = self._beam_hyps
+            done = []
+            for depth in range(self._beam_max_symbols + 1):
+                if not live:
+                    break
+                cand = []
+                for h in live:
+                    feeds = {
+                        "encoder_outputs": enc_frame,
+                        "targets": h.last_token,
+                        "target_length": self._target_length,
+                    }
+                    for name, state in zip(self._dec_state_in, h.state):
+                        feeds[name] = state
+                    raw = self._dec.run(None, feeds)
+                    out = dict(zip(self._dec_out_names, raw))
+                    logits = np.asarray(out.get("outputs", raw[0])).reshape(-1)
+                    logp = _log_softmax(logits.astype(np.float64))
+                    if self._blank_penalty:
+                        # Same knob as greedy. log_softmax is monotone and shifts every
+                        # class equally, so subtracting here is identical to subtracting
+                        # from the raw blank logit as far as a comparison is concerned.
+                        logp[blank] -= self._blank_penalty
+                    done.append(
+                        _BeamHyp(h.score + float(logp[blank]), h.tokens, h.state, h.last_token)
+                    )
+                    if depth == self._beam_max_symbols:
+                        continue  # emission budget spent: this frame contributes blank only
+                    new_state = tuple(out[n] for n in self._dec_state_out)
+                    n_take = min(self._beam_expand + 1, logp.size)  # +1 absorbs blank
+                    if n_take < logp.size:
+                        order = np.argpartition(-logp, n_take - 1)[:n_take]
+                    else:
+                        order = np.arange(logp.size)
+                    for t in order:
+                        t = int(t)
+                        if t == blank:
+                            continue
+                        cand.append(
+                            _BeamHyp(
+                                h.score + float(logp[t]),
+                                h.tokens + (t,),
+                                new_state,
+                                np.array([[t]], dtype=np.int32),
+                            )
+                        )
+                live = self._prune(cand, self._beam)
+            if done:
+                self._beam_hyps = self._prune(done, self._beam, merge=True)
+
+        if not self._beam_hyps:
+            return
+        best = max(self._beam_hyps, key=lambda h: h.ranked(self._beam_length_norm))
+        # Unlike greedy, the beam CAN return to a shorter best hypothesis, so the text is
+        # rewritten unconditionally rather than only grown. A partial may therefore
+        # retract; local_decode.py timestamps whatever it is given and the scorer reads
+        # the final string, so retraction costs nothing but must not be silent.
+        self._tokens = list(best.tokens)
+        self._hyp_text = _detokenize(self._tokens, self._vocab) if self._tokens else ""
