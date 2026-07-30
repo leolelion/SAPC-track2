@@ -1,0 +1,45 @@
+[parakeet_onnx] ready (threads=8 requested=8 ceiling=13 chunk=[9, 16] shift=[9, 16] pre_cache=[0, 9] drop_extra=2 valid_out_len=2 drop_policy=none trim_policy=none blank=1026 max_symbols=10 vocab=1027 blank_penalty=0.0 input_gain=off)
+
+=== blank-margin probe ===
+utterances            : 60
+greedy steps          : 5310
+blank won             : 4931 (92.86%)
+empty hypotheses      : 11 / 60
+
+margin = blank_logit - best_non_blank_logit, over BLANK-WINNING steps:
+  p1  :    0.411
+  p5  :    1.555
+  p10 :    2.597
+  p25 :    5.566
+  p50 :    9.048
+  p75 :   12.154
+  p90 :   15.050
+  p95 :   16.046
+  p99 :   22.121
+
+first-order flip fraction by beta (a blank flips when margin < beta):
+  beta=0.25   flips   0.49% of blank decisions (24 steps)
+  beta=0.50   flips   1.30% of blank decisions (64 steps)
+  beta=1.00   flips   3.10% of blank decisions (153 steps)
+  beta=1.50   flips   4.83% of blank decisions (238 steps)
+  beta=2.00   flips   6.98% of blank decisions (344 steps)
+  beta=3.00   flips  12.11% of blank decisions (597 steps)
+  beta=4.00   flips  17.16% of blank decisions (846 steps)
+  beta=6.00   flips  26.99% of blank decisions (1331 steps)
+  beta=8.00   flips  41.47% of blank decisions (2045 steps)
+  beta=12.00  flips  74.20% of blank decisions (3659 steps)
+
+empty vs non-empty utterances (11 vs 49), median of per-utterance margins:
+  p50 margin: empty   9.391 · non-empty   9.049 · delta  +0.342
+  p10 margin: empty   6.346 · non-empty   2.611 · delta  +3.735
+  -> empties are MORE confidently blank than ordinary blanks. Any beta that
+     flips them also floods every other utterance with insertions. If the gap
+     is large, a constant shift cannot separate the two populations: report
+     this and STOP before spending the grid.
+
+Grid advice: pick the sweep so the flip fraction spans roughly 0.5% to 20%.
+A beta whose flip fraction is ~0 cannot change the transcript; one above ~30%
+will bury the output in insertions. FIRST-ORDER ONLY -- flipping a blank changes
+the prediction state and every later step. This sizes the grid; evaluate.sh decides.
+
+Written: /workspace/artifacts/blank_penalty/probe_margin.json

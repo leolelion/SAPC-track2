@@ -636,3 +636,84 @@ extra cost: Arm A `f2cc2cc7be1c5e355f6ef3e536137b86`, Arm B l0 `cdf2dd9f0de63b51
 TTFT p90 2514.74 ms vs p50 742.70 ms — a long tail from empties / late first-partial, unchanged in
 kind from the Dev runs. Cutting it would push the latency corner further out, but the frontier
 position is already secured; CER (−0.92 to take the CER axis too) is the higher-value target.
+
+---
+
+## exp_s0_s1_probe — the empty tail is 3.89 points, and the decode knob cannot reach it
+**Date**: 2026-07-30 · **Pod**: `1ppb7l0i5xuna8` (started 14:41 UTC, stopped 14:52 UTC, **11 min, ~$0.55**)
+**Commits**: `6d275f9`, `9e0e1d9`, `dc6ae97` · **Artifacts**: `experiments/exp_s0_s1_probe/`
+
+Two CPU-only measurements, no GPU, no retraining. Both changed the picture.
+
+### S0 — the first error decomposition ever run through the official scorer
+`scripts/error_decomposition.py` on the banked hypotheses of the **exact artifact that scored
+Test1 CER 19.01%** (`art32/Dev_diag.fp32.predict.csv`). Both self-gates passed: our SGML parse
+reproduces `utils/compute_metrics.py` exactly, and our per-utterance sums reproduce the official
+metrics — **CER 18.7332% / WER 25.0540%**, identical to the banked gate numbers.
+
+Dev_diag severe, n=425, **28,986 ref chars, 5,430 errors**, 3 utterances hit the 1.0 clip.
+
+| char-level | count | CER points |
+|---|---|---|
+| **deletions** | 3,780 | **13.04** |
+| substitutions | 1,294 | 4.46 |
+| insertions | 401 | 1.38 |
+
+**del:sub 2.92:1 · del:ins 9.43:1.** Word-level: D 760 / S 631 / I 87 (del:sub 1.20:1) — the
+char ratio being much higher says deletions remove *whole spans*, while substitutions cost a few
+characters each.
+
+**Empties: 48 utterances, 1,129 errors = 3.89 CER points (20.8% of the error mass).** The
+retracted proxy claimed 11.29. The pre-pod estimate in `investigations/step01_runbook.md`
+(≈3.5–4.0, from local char counts) was right.
+
+**Where the mass actually is — by reference length:**
+
+| words | n | CER pts | share of errors | empties |
+|---|---|---|---|---|
+| **13+** | 99 | **9.55** | **51.0%** | 2 |
+| 7–12 | 82 | 4.00 | 21.4% | 9 |
+| 4–6 | 136 | 3.92 | 20.9% | 15 |
+| 2–3 | 72 | 0.85 | 4.5% | 8 |
+| 1 | 36 | 0.41 | 2.2% | 14 |
+
+**Half of all error mass is long utterances that are not empty at all.** The short/wake-word slice
+the entire research program was organised around is 6.7% of the errors.
+
+By etiology (CER points): ALS 6.40 (34.2% of errors) · CP 4.94 · **Parkinson 3.79** · Down 2.82 ·
+Stroke 0.78. Parkinson's has the *lowest* CER (10.00%) but carries 38% of all reference characters,
+so it still contributes more than Down Syndrome, whose CER is the worst at 29.88%.
+
+**One speaker, `55c1784a`, is 14.1% of all errors** (28 utts, 2.64 CER pts, 21 of the 48 empties,
+char-deletion rate 85.4%).
+
+### S1 — blank-margin probe on 60 real Dev_diag utterances: pre-registered **NO-GO**
+5,311 greedy steps, blank won 92.86%, 11/60 empty. Margins p10 **2.60** · p50 **9.05** · p90 15.05.
+Flip fractions: β=1 → 3.1% · β=2 → 7.0% · β=3 → 12.1% · β=4 → 17.2% · β=6 → 27.0%.
+
+The discriminating measurement came back on the **wrong side**:
+
+| | empty utts (11) | non-empty (49) | delta |
+|---|---|---|---|
+| p50 blank margin | 9.391 | 9.049 | +0.342 |
+| **p10 blank margin** | **6.346** | **2.611** | **+3.735** |
+
+Empties are **more** confidently blank than ordinary blanks. Even the *least* confident blank inside
+an empty utterance sits at 6.35, so reaching it needs β ≈ 6, which flips **27% of all blank
+decisions globally** — an insertion flood. **A constant logit shift cannot separate the two
+populations.** Per the pre-registered rule the grid was NOT run and the pod was stopped.
+
+### What this retires
+1. **The empty tail is not the CER problem.** 3.89 of 18.73 points, and unreachable by the decode
+   knob. Combined with D1 (joint unfreeze moved it 48 → 50) and the `input_gain` patch (0/48), three
+   independent attacks have now failed on it. Stop organising the programme around it.
+2. **The local gain finding held up.** `investigations/step01_runbook.md` showed −30 dB attenuation
+   changes nothing (per-feature normalisation) while SNR degradation reproduces the empties. The
+   "quiet onset −58.5 dBFS" statistic is a correlate, not a cause.
+3. **The real target is deletion inside long, non-empty output**: 13.04 of 18.73 CER points are
+   deletions, and 51% of the error mass is utterances of 13+ words.
+
+### Cost of the pre-registration
+Writing the gate first turned a ~4.5 h session into an 11-minute one and stopped a grid whose
+rationale had just been falsified. The instrument also caught its own calibration error twice before
+the pod (a guessed 0–4 β grid was dead; 0–12 reached too high).

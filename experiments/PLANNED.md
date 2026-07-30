@@ -65,8 +65,8 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 
 | ID | Name | Depends on | Cost | Status | Decision metric |
 |---|---|---|---|---|---|
-| **S0** | Official-scorer error decomposition | CPU pod (data lives there) | ~0, minutes | **ready** — `scripts/error_decomposition.py`, self-gated against the official metric classes | error mass in CER points by etiology / speaker / length / empty; char S/D/I |
-| **S1** | Blank-penalty probe + sweep | S0 shares the session | ~4.5 h **CPU, no GPU** | **ready** — `investigations/step01_runbook.md` | probe GO/NO-GO first; then Dev_diag CER ≤ 18.43% ∧ Dev_clean2k ≤ +0.20 ∧ mean latency ≤ 420 ms |
+| **S0** | Official-scorer error decomposition | CPU pod (data lives there) | ~0, minutes | **done 2026-07-30** → `EXPERIMENT_LOG.md` `exp_s0_s1_probe` | empties = **3.89** CER pts (not 11.29); deletions **13.04** of 18.73; **51% of error mass is 13+ word utts** |
+| **S1** | Blank-penalty probe + sweep | S0 shares the session | 11 min spent of ~4.5 h budgeted | **NO-GO 2026-07-30, grid not run** | empties are MORE confidently blank (p10 margin 6.35 vs 2.61); β≈6 needed, flips 27% of all blanks |
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
 | **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **done 2026-07-29 — FALSIFIED** → `EXPERIMENT_LOG.md` `exp_armB_parakeet` | severe CER 18.69% → **18.74%** (worse), empties **48 → 50** |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |

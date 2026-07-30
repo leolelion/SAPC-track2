@@ -1,0 +1,595 @@
+{
+  "submission_dir": "/workspace/onnx_ship/extract32",
+  "synthetic": false,
+  "n_utts": 60,
+  "n_steps": 5310,
+  "n_blank_won": 4931,
+  "blank_win_rate": 0.9286252354048964,
+  "margin_percentiles_blank_steps": {
+    "p1": 0.41102485656738286,
+    "p5": 1.5554485321044922,
+    "p10": 2.5973873138427734,
+    "p25": 5.5656538009643555,
+    "p50": 9.048454284667969,
+    "p75": 12.153568267822266,
+    "p90": 15.049829483032227,
+    "p95": 16.04552936553955,
+    "p99": 22.120655822753903
+  },
+  "margin_percentiles_all_steps": {
+    "p1": -9.2492649269104,
+    "p5": -1.6715908050537112,
+    "p10": 0.9970558166503904,
+    "p25": 4.401797294616699,
+    "p50": 8.62956428527832,
+    "p75": 11.823995113372803,
+    "p90": 14.90681076049805,
+    "p95": 15.945538043975832,
+    "p99": 21.955703506469725
+  },
+  "flip_fraction_by_beta": {
+    "0.25": 0.004867166903265057,
+    "0.5": 0.012979111742040155,
+    "1.0": 0.031028189008314742,
+    "1.5": 0.04826607179071182,
+    "2.0": 0.06976272561346583,
+    "3.0": 0.12107077671871831,
+    "4.0": 0.17156763334009328,
+    "6.0": 0.26992496451024134,
+    "8.0": 0.4147231798823768,
+    "12.0": 0.7420401541269519
+  },
+  "per_utterance": [
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_13501_4628",
+      "n_steps": 150,
+      "empty": true,
+      "blank_margin_p10": 7.17303237915039,
+      "blank_margin_p50": 9.6807861328125,
+      "blank_margin_min": 4.727466583251953
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_33988_10610",
+      "n_steps": 40,
+      "empty": false,
+      "blank_margin_p10": 5.222253608703613,
+      "blank_margin_p50": 11.684720993041992,
+      "blank_margin_min": 0.6395092010498047
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_186_5476",
+      "n_steps": 96,
+      "empty": false,
+      "blank_margin_p10": 3.0170177459716805,
+      "blank_margin_p50": 9.827130317687988,
+      "blank_margin_min": 0.3730621337890625
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_30219_8273",
+      "n_steps": 39,
+      "empty": false,
+      "blank_margin_p10": 3.115962028503418,
+      "blank_margin_p50": 8.819794654846191,
+      "blank_margin_min": 0.6434173583984375
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_119_11398",
+      "n_steps": 172,
+      "empty": false,
+      "blank_margin_p10": 2.4687366485595703,
+      "blank_margin_p50": 9.432945251464844,
+      "blank_margin_min": 0.3699378967285156
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_132_4576",
+      "n_steps": 132,
+      "empty": true,
+      "blank_margin_p10": 8.614688110351562,
+      "blank_margin_p50": 12.089644432067871,
+      "blank_margin_min": 1.4304924011230469
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_185_4579",
+      "n_steps": 126,
+      "empty": false,
+      "blank_margin_p10": 2.011049270629883,
+      "blank_margin_p50": 8.825660705566406,
+      "blank_margin_min": 0.330108642578125
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_580_14966",
+      "n_steps": 171,
+      "empty": true,
+      "blank_margin_p10": 2.3123741149902344,
+      "blank_margin_p50": 8.659540176391602,
+      "blank_margin_min": 0.08370208740234375
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_29336_5520",
+      "n_steps": 100,
+      "empty": false,
+      "blank_margin_p10": 2.497052001953125,
+      "blank_margin_p50": 6.815336227416992,
+      "blank_margin_min": 0.4964179992675781
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_30201_5474",
+      "n_steps": 216,
+      "empty": false,
+      "blank_margin_p10": 1.476300621032715,
+      "blank_margin_p50": 6.716400146484375,
+      "blank_margin_min": 0.010097503662109375
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_29122_12222",
+      "n_steps": 138,
+      "empty": false,
+      "blank_margin_p10": 2.4422611236572265,
+      "blank_margin_p50": 8.430418968200684,
+      "blank_margin_min": 0.184967041015625
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_196_15938",
+      "n_steps": 43,
+      "empty": false,
+      "blank_margin_p10": 1.8483482360839847,
+      "blank_margin_p50": 10.434595108032227,
+      "blank_margin_min": 0.19159698486328125
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_60_15939",
+      "n_steps": 31,
+      "empty": false,
+      "blank_margin_p10": 3.1635971069335938,
+      "blank_margin_p50": 10.115873336791992,
+      "blank_margin_min": 0.6974334716796875
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_30225_14966",
+      "n_steps": 192,
+      "empty": false,
+      "blank_margin_p10": 4.278839111328125,
+      "blank_margin_p50": 10.689871788024902,
+      "blank_margin_min": 0.22388076782226562
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_31665_15941",
+      "n_steps": 32,
+      "empty": false,
+      "blank_margin_p10": 5.734114074707032,
+      "blank_margin_p50": 10.899544715881348,
+      "blank_margin_min": 0.04378700256347656
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_477_15778",
+      "n_steps": 60,
+      "empty": false,
+      "blank_margin_p10": 1.0509357452392578,
+      "blank_margin_p50": 4.169284820556641,
+      "blank_margin_min": 0.13835525512695312
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_125_12222",
+      "n_steps": 110,
+      "empty": false,
+      "blank_margin_p10": 1.764503860473633,
+      "blank_margin_p50": 7.3601179122924805,
+      "blank_margin_min": 0.41878700256347656
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_29716_15937",
+      "n_steps": 39,
+      "empty": false,
+      "blank_margin_p10": 3.4820404052734375,
+      "blank_margin_p50": 9.272270202636719,
+      "blank_margin_min": 0.8152275085449219
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_30173_8744",
+      "n_steps": 42,
+      "empty": false,
+      "blank_margin_p10": 4.65942611694336,
+      "blank_margin_p50": 11.570093154907227,
+      "blank_margin_min": 3.408933639526367
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29353_8104",
+      "n_steps": 36,
+      "empty": false,
+      "blank_margin_p10": 3.751784324645996,
+      "blank_margin_p50": 11.732524871826172,
+      "blank_margin_min": 0.2049102783203125
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_29676_13967",
+      "n_steps": 47,
+      "empty": false,
+      "blank_margin_p10": 2.370464324951172,
+      "blank_margin_p50": 8.212531089782715,
+      "blank_margin_min": 0.8577976226806641
+    },
+    {
+      "id": "e42558d6-5a42-437d-e7c4-08dcd9e31338_29700_11430",
+      "n_steps": 127,
+      "empty": false,
+      "blank_margin_p10": 0.9761781692504883,
+      "blank_margin_p50": 6.283102035522461,
+      "blank_margin_min": 0.3055229187011719
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_189_15937",
+      "n_steps": 30,
+      "empty": false,
+      "blank_margin_p10": 6.6907501220703125,
+      "blank_margin_p50": 10.383797645568848,
+      "blank_margin_min": 1.9308719635009766
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_542_8271",
+      "n_steps": 58,
+      "empty": false,
+      "blank_margin_p10": 3.1998584747314456,
+      "blank_margin_p50": 10.865704536437988,
+      "blank_margin_min": 0.739898681640625
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1054_3802",
+      "n_steps": 64,
+      "empty": true,
+      "blank_margin_p10": 4.857919311523437,
+      "blank_margin_p50": 10.691495895385742,
+      "blank_margin_min": 2.8332061767578125
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_1053_8745",
+      "n_steps": 73,
+      "empty": false,
+      "blank_margin_p10": 3.0136220932006834,
+      "blank_margin_p50": 10.157190322875977,
+      "blank_margin_min": 0.3560352325439453
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29338_8791",
+      "n_steps": 40,
+      "empty": false,
+      "blank_margin_p10": 0.7070375442504883,
+      "blank_margin_p50": 2.812175750732422,
+      "blank_margin_min": 0.03701210021972656
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29347_8746",
+      "n_steps": 41,
+      "empty": false,
+      "blank_margin_p10": 2.158152961730957,
+      "blank_margin_p50": 8.329158782958984,
+      "blank_margin_min": 0.059886932373046875
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_583_4629",
+      "n_steps": 74,
+      "empty": true,
+      "blank_margin_p10": 6.516433906555176,
+      "blank_margin_p50": 9.062381744384766,
+      "blank_margin_min": 5.897113800048828
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_522_14083",
+      "n_steps": 78,
+      "empty": false,
+      "blank_margin_p10": 2.5555980682373045,
+      "blank_margin_p50": 10.04096794128418,
+      "blank_margin_min": 0.5504302978515625
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_49_15022",
+      "n_steps": 72,
+      "empty": false,
+      "blank_margin_p10": 9.234425354003907,
+      "blank_margin_p50": 15.125630378723145,
+      "blank_margin_min": 1.0899581909179688
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_626_15022",
+      "n_steps": 193,
+      "empty": false,
+      "blank_margin_p10": 2.611201858520508,
+      "blank_margin_p50": 7.524737358093262,
+      "blank_margin_min": 0.28101539611816406
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_39_15936",
+      "n_steps": 32,
+      "empty": false,
+      "blank_margin_p10": 6.882103538513183,
+      "blank_margin_p50": 10.800880432128906,
+      "blank_margin_min": 1.30377197265625
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_1057_15941",
+      "n_steps": 38,
+      "empty": false,
+      "blank_margin_p10": 4.824526596069336,
+      "blank_margin_p50": 10.274162292480469,
+      "blank_margin_min": 0.48554420471191406
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_29723_15022",
+      "n_steps": 137,
+      "empty": false,
+      "blank_margin_p10": 3.8158056259155275,
+      "blank_margin_p50": 9.04869556427002,
+      "blank_margin_min": 1.1009101867675781
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1059_8102",
+      "n_steps": 43,
+      "empty": false,
+      "blank_margin_p10": 8.366024398803711,
+      "blank_margin_p50": 11.490320205688477,
+      "blank_margin_min": 0.3590431213378906
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_28678_4646",
+      "n_steps": 262,
+      "empty": true,
+      "blank_margin_p10": 6.345986366271973,
+      "blank_margin_p50": 9.595817565917969,
+      "blank_margin_min": 3.2019519805908203
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_29118_5474",
+      "n_steps": 132,
+      "empty": false,
+      "blank_margin_p10": 1.81011905670166,
+      "blank_margin_p50": 7.053586959838867,
+      "blank_margin_min": 0.3451728820800781
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1066_8102",
+      "n_steps": 47,
+      "empty": false,
+      "blank_margin_p10": 5.495724678039551,
+      "blank_margin_p50": 12.435888290405273,
+      "blank_margin_min": 2.2247085571289062
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_605_13967",
+      "n_steps": 92,
+      "empty": false,
+      "blank_margin_p10": 4.325046348571777,
+      "blank_margin_p50": 7.938093185424805,
+      "blank_margin_min": 0.9650688171386719
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_148_8745",
+      "n_steps": 34,
+      "empty": false,
+      "blank_margin_p10": 1.8287315368652344,
+      "blank_margin_p50": 5.899293899536133,
+      "blank_margin_min": 0.1448192596435547
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29083_8744",
+      "n_steps": 40,
+      "empty": false,
+      "blank_margin_p10": 4.5416805267333995,
+      "blank_margin_p50": 11.535857200622559,
+      "blank_margin_min": 0.3500194549560547
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_30216_13967",
+      "n_steps": 118,
+      "empty": false,
+      "blank_margin_p10": 1.400350379943848,
+      "blank_margin_p50": 6.873564720153809,
+      "blank_margin_min": 0.11919593811035156
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_558_8789",
+      "n_steps": 39,
+      "empty": false,
+      "blank_margin_p10": 1.3041210174560547,
+      "blank_margin_p50": 4.5875654220581055,
+      "blank_margin_min": 0.46508216857910156
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_29735_14082",
+      "n_steps": 55,
+      "empty": false,
+      "blank_margin_p10": 1.8475948333740235,
+      "blank_margin_p50": 6.297116279602051,
+      "blank_margin_min": 0.0444183349609375
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_30192_5335",
+      "n_steps": 198,
+      "empty": false,
+      "blank_margin_p10": 1.7198965072631835,
+      "blank_margin_p50": 5.80164909362793,
+      "blank_margin_min": 0.1649932861328125
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_63_4562",
+      "n_steps": 68,
+      "empty": true,
+      "blank_margin_p10": 6.107405471801758,
+      "blank_margin_p50": 9.141560554504395,
+      "blank_margin_min": 1.3798694610595703
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_636_4650",
+      "n_steps": 94,
+      "empty": true,
+      "blank_margin_p10": 9.131106567382812,
+      "blank_margin_p50": 11.104987144470215,
+      "blank_margin_min": 6.149223327636719
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1061_8744",
+      "n_steps": 48,
+      "empty": false,
+      "blank_margin_p10": 5.174576759338379,
+      "blank_margin_p50": 8.70846939086914,
+      "blank_margin_min": 2.527040481567383
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_81_14082",
+      "n_steps": 32,
+      "empty": false,
+      "blank_margin_p10": 4.476772308349609,
+      "blank_margin_p50": 10.098639488220215,
+      "blank_margin_min": 1.2118911743164062
+    },
+    {
+      "id": "54618732-a2cb-49ec-c034-08dc605e0191_1070_5680",
+      "n_steps": 98,
+      "empty": false,
+      "blank_margin_p10": 0.8065877914428712,
+      "blank_margin_p50": 9.219436645507812,
+      "blank_margin_min": 0.31194114685058594
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_134_15939",
+      "n_steps": 71,
+      "empty": false,
+      "blank_margin_p10": 4.0372314453125,
+      "blank_margin_p50": 11.945581436157227,
+      "blank_margin_min": 1.743112564086914
+    },
+    {
+      "id": "4902e925-28da-41fa-da79-08dd7d685e99_459_15022",
+      "n_steps": 108,
+      "empty": false,
+      "blank_margin_p10": 1.7940998077392578,
+      "blank_margin_p50": 4.664674758911133,
+      "blank_margin_min": 0.4067192077636719
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_27569_4579",
+      "n_steps": 124,
+      "empty": true,
+      "blank_margin_p10": 4.132917404174805,
+      "blank_margin_p50": 6.6324663162231445,
+      "blank_margin_min": 0.7845287322998047
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_605_4646",
+      "n_steps": 72,
+      "empty": true,
+      "blank_margin_p10": 6.579487228393555,
+      "blank_margin_p50": 9.39057445526123,
+      "blank_margin_min": 2.496877670288086
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_112_4576",
+      "n_steps": 78,
+      "empty": false,
+      "blank_margin_p10": 1.8582717895507812,
+      "blank_margin_p50": 7.855362892150879,
+      "blank_margin_min": 0.03372764587402344
+    },
+    {
+      "id": "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_459_8791",
+      "n_steps": 51,
+      "empty": false,
+      "blank_margin_p10": 2.20550594329834,
+      "blank_margin_p50": 7.553075790405273,
+      "blank_margin_min": 0.21925735473632812
+    },
+    {
+      "id": "7c58626d-162e-44d8-0e84-08ddcde6e74d_33867_15775",
+      "n_steps": 31,
+      "empty": false,
+      "blank_margin_p10": 3.3287586212158207,
+      "blank_margin_p50": 11.626532554626465,
+      "blank_margin_min": 0.5506362915039062
+    },
+    {
+      "id": "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29679_8371",
+      "n_steps": 52,
+      "empty": false,
+      "blank_margin_p10": 1.1267932891845702,
+      "blank_margin_p50": 6.845974922180176,
+      "blank_margin_min": 0.08974266052246094
+    },
+    {
+      "id": "55c1784a-ece4-414a-25b4-08dc18e8f490_1117_3802",
+      "n_steps": 254,
+      "empty": true,
+      "blank_margin_p10": 6.233178520202637,
+      "blank_margin_p50": 9.332595825195312,
+      "blank_margin_min": 2.4675979614257812
+    }
+  ],
+  "empty_vs_nonempty": {
+    "empty_p50": 9.39057445526123,
+    "nonempty_p50": 9.04869556427002,
+    "delta_p50": 0.34187889099121094,
+    "empty_p10": 6.345986366271973,
+    "nonempty_p10": 2.611201858520508,
+    "delta_p10": 3.7347845077514648
+  },
+  "hypotheses": {
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_13501_4628": "<EMPTY>",
+    "e42558d6-5a42-437d-e7c4-08dcd9e31338_33988_10610": "<5 chars>",
+    "54618732-a2cb-49ec-c034-08dc605e0191_186_5476": "<18 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_30219_8273": "<9 chars>",
+    "e42558d6-5a42-437d-e7c4-08dcd9e31338_119_11398": "<27 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_132_4576": "<EMPTY>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_185_4579": "<40 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_580_14966": "<EMPTY>",
+    "54618732-a2cb-49ec-c034-08dc605e0191_29336_5520": "<24 chars>",
+    "54618732-a2cb-49ec-c034-08dc605e0191_30201_5474": "<37 chars>",
+    "e42558d6-5a42-437d-e7c4-08dcd9e31338_29122_12222": "<19 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_196_15938": "<24 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_60_15939": "<12 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_30225_14966": "<60 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_31665_15941": "<6 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_477_15778": "<18 chars>",
+    "e42558d6-5a42-437d-e7c4-08dcd9e31338_125_12222": "<30 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_29716_15937": "<21 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_30173_8744": "<9 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29353_8104": "<15 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_29676_13967": "<22 chars>",
+    "e42558d6-5a42-437d-e7c4-08dcd9e31338_29700_11430": "<18 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_189_15937": "<14 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_542_8271": "<23 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_1054_3802": "<EMPTY>",
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_1053_8745": "<11 chars>",
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29338_8791": "<23 chars>",
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_29347_8746": "<6 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_583_4629": "<EMPTY>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_522_14083": "<23 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_49_15022": "<10 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_626_15022": "<7 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_39_15936": "<5 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_1057_15941": "<23 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_29723_15022": "<20 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1059_8102": "<14 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_28678_4646": "<EMPTY>",
+    "54618732-a2cb-49ec-c034-08dc605e0191_29118_5474": "<17 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1066_8102": "<30 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_605_13967": "<25 chars>",
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_148_8745": "<9 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29083_8744": "<14 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_30216_13967": "<31 chars>",
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_558_8789": "<14 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_29735_14082": "<6 chars>",
+    "54618732-a2cb-49ec-c034-08dc605e0191_30192_5335": "<27 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_63_4562": "<EMPTY>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_636_4650": "<EMPTY>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_1061_8744": "<27 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_81_14082": "<14 chars>",
+    "54618732-a2cb-49ec-c034-08dc605e0191_1070_5680": "<11 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_134_15939": "<19 chars>",
+    "4902e925-28da-41fa-da79-08dd7d685e99_459_15022": "<19 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_27569_4579": "<EMPTY>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_605_4646": "<EMPTY>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_112_4576": "<11 chars>",
+    "4a9f71ab-f3a6-48a9-a1ba-08dcc7adb730_459_8791": "<37 chars>",
+    "7c58626d-162e-44d8-0e84-08ddcde6e74d_33867_15775": "<5 chars>",
+    "8926bff8-ec04-42ba-57e1-08dcbb9f64e1_29679_8371": "<23 chars>",
+    "55c1784a-ece4-414a-25b4-08dc18e8f490_1117_3802": "<EMPTY>"
+  },
+  "note": "hypothesis TEXT reduced to lengths (SAP audio content); margins/percentiles intact."
+}
