@@ -41,9 +41,14 @@ ART=${ART:-/workspace/artifacts/blank_penalty}
 EXTRACT=${EXTRACT:-$WORK/extract}          # the EXTRACTED shipped zip, not the build dir
 GATEPY=${GATEPY:-$WORK/offlinevenv/bin/python}
 ORT_VERSION=${ORT_VERSION:-1.27.0}
-GRID=${GRID:-"0.0 0.5 1.0 1.5 2.0 3.0 4.0"}
+# Provisional. The `probe` stage measures the real blank-margin distribution and prints
+# the grid to use; replace this with what it says. A synthetic-audio probe on 2026-07-30
+# put blank margins at 6.7-15.9 (median 14.6), so the original 0-4 guess was entirely
+# dead -- every beta below ~6 flipped nothing. Do not sweep before probing.
+GRID=${GRID:-"0.0 2.0 4.0 6.0 8.0 10.0 12.0"}
 FINAL=${FINAL:-}                            # betas to confirm on Dev_clean2k; set after the grid
-STAGES=${STAGES:-"decode_grid score_grid"}
+PROBE_UTTS=${PROBE_UTTS:-60}
+STAGES=${STAGES:-"probe"}
 GRID_SPLIT=${GRID_SPLIT:-Dev_diag}
 FINAL_SPLIT=${FINAL_SPLIT:-Dev_clean2k}
 
@@ -62,6 +67,24 @@ GATE_ORT=$("$GATEPY" -c "import onnxruntime;print(onnxruntime.__version__)")
 grep -q "SAPC2_BLANK_PENALTY" "$EXTRACT/model.py" || {
   echo "preflight: the extracted model.py has no blank-penalty hook — re-package before sweeping"; exit 1; }
 echo "[preflight] $GATEPY ort=$GATE_ORT · artifact=$EXTRACT · grid='$GRID'"
+
+# --------------------------------------------------------------- probe
+# Minutes, and it can kill the whole sweep before it costs anything. Two questions:
+#   (1) what beta range is even responsive (logits are unnormalised -- we have no prior);
+#   (2) are the empties' blank decisions SEPARABLE from ordinary blanks? If the empties
+#       are more confidently blank than everyone else, no constant shift can flip them
+#       without flooding every other utterance with insertions -> report and STOP.
+if has probe; then
+  step "blank-margin probe on $GRID_SPLIT ($PROBE_UTTS utts)"
+  "$GATEPY" "$REPO/scripts/probe_blank_margin.py" \
+    --submission-dir "$EXTRACT" \
+    --manifest-csv "$DATA/manifest/$GRID_SPLIT.csv" --data-root "$DATA" \
+    --max-utts "$PROBE_UTTS" \
+    --out-json "$ART/probe_margin.json" 2>&1 | tee "$ART/probe_margin.log"
+  echo
+  echo "STOP AND READ. Set GRID from the flip-fraction table (target 0.5%-20% flipped),"
+  echo "and check the empty-vs-non-empty separation before spending the grid."
+fi
 
 # --------------------------------------------------------------- decode grid
 # One process per beta, in parallel, each pinned to 1 intra-op thread. local_decode.py is

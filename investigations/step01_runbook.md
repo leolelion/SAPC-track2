@@ -52,6 +52,7 @@ greedy decoding an additive shift on one class is the only thing the argmax can 
 | `scripts/error_decomposition.py` | **new.** Step 0. Self-verifies against the official metric classes before printing anything. |
 | `track2_starting_kit/parakeet_onnx/model.py` | `self._blank_penalty` (env `SAPC2_BLANK_PENALTY` > `config.decoding.blank_penalty` > `0.0`); applied in `_decode_frames`; echoed in the ready-line. |
 | `track2_starting_kit/parakeet_onnx/config.yaml` | `decoding.blank_penalty: 0.0` + rationale. |
+| `scripts/probe_blank_margin.py` | **new.** Sizes the β grid from the model and answers the go/no-go question below. Wraps the ONNX session from outside; ships nothing. |
 | `scripts/run_blank_penalty_sweep.sh` | **new.** The whole pod session, staged and gated. |
 
 The repo copy of `model.py` was **md5-identical to the shipped zip** (`0c9a06b67ec0ba5e59c44c8b8320f25b`)
@@ -78,6 +79,45 @@ decode path is the scored one instruction-for-instruction.
 
 ---
 
+---
+
+## The probe stage, and why it is now first (added 2026-07-30, after it changed the plan)
+
+The wrapper emits **unnormalised joint logits**, so "β = 1.0" had no meaning attached to it.
+`scripts/probe_blank_margin.py` records `blank_logit − best_non_blank_logit` at every greedy step
+and reports what fraction of blank decisions each β would flip.
+
+**Run locally on the shipped artifact + synthetic audio (Mac arm64, ort 1.24.4), 2026-07-30:**
+blank margins **6.74 (p1) … 15.89 (p99), median 14.59**. Flip fraction: **0.00% for every β ≤ 6**,
+5.3% at β=8, 18.4% at β=12.
+
+**The originally planned 0–4 grid was entirely dead.** It would have burned the full session,
+returned a perfectly flat curve, and we would have concluded "the blank margin is not reachable by
+a constant shift" — a false negative, from a grid chosen by guessing. Provisional grid is now
+`0 2 4 6 8 10 12`, and the on-pod probe overrides it.
+
+*Caveat, stated plainly:* that measurement is on **synthetic non-speech**, where the model is
+correctly confident about blank. Real dysarthric speech at a genuine emit point will sit lower by an
+unknown amount. What the local run establishes is the **scale** — logits are O(10), not O(1) — not
+the operating point. The on-pod probe on real Dev_diag audio sets that.
+
+### GO/NO-GO, pre-registered, decided by the probe before the grid runs
+
+The probe splits per-utterance blank margins by whether that utterance came out **empty**.
+
+- **GO** — empties' median blank margin is **≤** the non-empty median. The empties are the *least*
+  confident blanks, so a modest β reaches them before it disturbs anything else. Proceed to the grid,
+  centred where the flip fraction is 0.5–20%.
+- **NO-GO** — empties are **more** confidently blank than ordinary blanks. Then no constant shift
+  separates the two populations: any β large enough to flip an empty floods every other utterance
+  with insertions. **Report the separation number, do not run the grid, stop the pod.**
+
+NO-GO is not a wasted session. It converts "the deletion bias might be a calibration offset" into
+"it is distributional", which is a direct argument for the GPU session (§ *What this does NOT do*)
+and retires the decode-time line. Minutes, for a result that redirects the next spend.
+
+---
+
 ## Pod preflight (each of these has bitten us before)
 
 1. **`evaluate.sh` placeholders.** The repo ships `DATA_ROOT` / `PROJ_ROOT` / `SCTK_DIR` as
@@ -100,8 +140,13 @@ decode path is the scored one instruction-for-instruction.
 export REPO=/workspace/SAPC-template DATA=/workspace/data/SAP \
        WORK=/workspace/parakeet_onnx ART=/workspace/artifacts/blank_penalty
 
+# --- probe FIRST: minutes, sets the grid, and can end the sweep before it starts
+STAGES="probe" bash scripts/run_blank_penalty_sweep.sh
+# read the flip-fraction table + the empty-vs-non-empty separation, apply the GO/NO-GO
+
 # --- grid: 7 betas x Dev_diag (425 utts), decodes in parallel ~45 min, then serial scoring
-STAGES="decode_grid score_grid" bash scripts/run_blank_penalty_sweep.sh
+GRID="0.0 2.0 4.0 6.0 8.0 10.0 12.0" \
+  STAGES="decode_grid score_grid" bash scripts/run_blank_penalty_sweep.sh
 
 # --- read the printed curve, pick FINAL = "0.0 <best> <neighbour>", then:
 FINAL="0.0 1.0 1.5" STAGES="decode_final score_final latency" \
@@ -161,10 +206,9 @@ on a plateau. This does not eliminate the bias; it bounds it. Say so in the log.
 4. **All-empty latency fallback.** `compute_latency.py` reports a fallback TTFT when everything is
    empty; the int8 catastrophe's "6,170 ms TTFT" was a decode failure wearing a latency number. Check
    `n_utts_with_timing == n_utts_total` in every latency log.
-5. **β scale is unknown a priori.** These are unnormalised joint logits; the grid spans 0–4 to find
-   the responsive region. If every β below 4 changes nothing, the blank margin is larger than the
-   grid — extend upward rather than concluding the lever is dead. If β=0.5 already destroys accuracy,
-   bisect downward.
+5. **β scale — now measured, not guessed.** See the probe section. A flat curve is only evidence the
+   lever is dead if the probe says the grid covered the responsive region; otherwise it is evidence
+   the grid was wrong. This is exactly the mistake the probe was written to prevent.
 
 ---
 

@@ -65,6 +65,8 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 
 | ID | Name | Depends on | Cost | Status | Decision metric |
 |---|---|---|---|---|---|
+| **S0** | Official-scorer error decomposition | CPU pod (data lives there) | ~0, minutes | **ready** — `scripts/error_decomposition.py`, self-gated against the official metric classes | error mass in CER points by etiology / speaker / length / empty; char S/D/I |
+| **S1** | Blank-penalty probe + sweep | S0 shares the session | ~4.5 h **CPU, no GPU** | **ready** — `investigations/step01_runbook.md` | probe GO/NO-GO first; then Dev_diag CER ≤ 18.43% ∧ Dev_clean2k ≤ +0.20 ∧ mean latency ≤ 420 ms |
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
 | **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **done 2026-07-29 — FALSIFIED** → `EXPERIMENT_LOG.md` `exp_armB_parakeet` | severe CER 18.69% → **18.74%** (worse), empties **48 → 50** |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |
@@ -73,6 +75,35 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 | D4 | Sequential synth → real re-anneal | D2 or D3 partial | ~4 h GPU | **needs re-justification** | severe CER vs best of D2/D3 |
 | D5 | TORGO + UASpeech targeted | ~~D1 pass~~ + license | ~3 h GPU | **needs re-justification** | severe CER, empty count |
 | ~~D7~~ | F5 + kNN-VC mixed | — | — | **killed** | known EOS collapse; mechanism = our primary failure mode |
+
+---
+
+### S0 / S1 — measure with the real scorer, then pull the one lever that needs no GPU
+**Added 2026-07-30, ahead of D2–D5.** Ranking is the CER × latency **Pareto frontier** (Q), and we
+are already non-dominated on Test1 (19.01 / 416.9 ms) holding the low-latency corner. These two
+target the CER axis without a GPU.
+
+**S0.** Every error analysis we own came from proxy scripts; the load-bearing one was 11 CER points
+wrong and justified D1–D6. `scripts/error_decomposition.py` reads the sclite SGML the official
+scorer consumes and refuses to print unless it reproduces `CharErrorRateMinTwoRefs` /
+`WordErrorRateMinTwoRefs` to 1e-6. Note official CER is **char-weighted micro**, so empties (median
+≤3 words) cost ≈3.5–4.0 points, not the 11.3 the retracted table claimed.
+
+**S1.** Official error profile is deletion-dominated (del:sub 4:1, **del:ins 18:1**) — the joint
+over-emits blank. A blank-logit penalty was previously ruled out as blocked behind NeMo's
+`greedy_batch` pinning; that stopped being true when we shipped ONNX, whose wrapper hand-rolls the
+greedy loop. Ships `0.0` = byte-identical decode. It is the only lever that moves **both** Pareto
+axes the same way (earlier emission also lowers TTFT).
+
+**Probe gates the sweep.** `scripts/probe_blank_margin.py` measured blank margins of **6.7–15.9
+(median 14.6)** on the shipped artifact — the originally planned 0–4 β grid was entirely dead and
+would have produced a false negative. On-pod it also answers the go/no-go: if the empties' blank
+margins are *higher* than ordinary blanks, no constant shift separates them and the decode-time line
+closes in minutes rather than a session.
+
+**Kill.** Probe NO-GO, or no β satisfies the pre-registered rule → keep `blank_penalty: 0.0`, and the
+next spend is the GPU session (resume the un-converged Arm B curve × FastEmit λ sweep × top-k
+checkpoint averaging × a speaker-disjoint val), not more decode-time tuning.
 
 ---
 
