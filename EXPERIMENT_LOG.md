@@ -717,3 +717,105 @@ populations.** Per the pre-registered rule the grid was NOT run and the pod was 
 Writing the gate first turned a ~4.5 h session into an 11-minute one and stopped a grid whose
 rationale had just been falsified. The instrument also caught its own calibration error twice before
 the pod (a guessed 0–4 β grid was dead; 0–12 reached too high).
+
+---
+
+## exp_s2_beam — 2026-07-30 — deletion localization + RNN-T beam grid
+
+**Commit** `92ee96d` · pod `3dwiczo41jeg1y` (H200, $4.39/h), 16:23–18:11 UTC ≈ 1h50m ≈ $8
+**Artifact** the shipped fp32 zip (`sha b17ad0d8`), the one that scored Test1 CER 19.01%
+**Verdict** **beam search FALSIFIED.** Keep `beam: 1`. Nothing submitted.
+
+### Preconditions actually verified
+
+- `beam=1` parity: **0/40 utterances differ** from the banked shipped decode, and the full-set
+  decomposition reproduces **CER 18.7332% / charD 3780** exactly. The control is the shipped model.
+- Scorer self-gates A and B green on every config.
+- Environment: this pod's container `python3` has no torchmetrics, so `/workspace/venv/bin` went
+  first on PATH (`steps/eval/evaluate.sh` resolves `python3` from PATH). Wrapped, never edited.
+
+### S2a — where the deletions are
+
+| position bin | 0-20% | 20-40% | 40-60% | 60-80% | 80-100% |
+|---|---|---|---|---|---|
+| all (n=509) | 21.8 | 20.6 | 16.5 | 21.6 | 19.4 |
+| 13+ words (n=329) | 24.0 | 19.8 | 12.5 | 21.6 | 22.2 |
+
+**Flat.** Runs are 62.7% singletons, 20.8% pairs. Per the pre-registered reading table this is
+**M2 (per-frame blank prior)** and it **falsifies M3 (prediction-net drift)** and within-utterance
+left-context exhaustion — both predict a rising histogram.
+
+### S2c — the rate finding, which reframes S0
+
+| | spearman vs CER |
+|---|---|
+| speaking rate (ref chars/s) | **−0.254** |
+| duration | +0.144 |
+| word count | **+0.027** |
+
+| rate quartile | n | CER% | word-del% | empties |
+|---|---|---|---|---|
+| Q1 slowest | 106 | **40.14** | 30.62 | 20 |
+| Q4 fastest | 107 | **10.31** | 6.19 | 5 |
+
+A **4x CER gradient on speaking rate**, and inside the 13+ word bucket (length held fixed)
+slow 19.76% vs fast 9.19%. The longest-*duration* quartile has the *lowest* CER (15.17%).
+
+**This corrects our own reading of S0.** "51% of error mass is 13+ word utterances" is a mass
+statistic, not a difficulty statistic — long utterances carry half the error because they carry half
+the characters. Word count explains essentially nothing. The axis is **slow speech, not long speech.**
+
+### S2c — the grid
+
+| config | CER% | WER% | empty | charD | dCER | dDel | dIns | wall | proj_s |
+|---|---|---|---|---|---|---|---|---|---|
+| **b1 greedy** | **18.733** | 25.054 | 48 | 3780 | — | — | — | 3889 | 4620 |
+| b4 m2 mean | 20.256 | 26.468 | **28** | 3972 | +1.523 | **+192** | +41 | 4815 | 5720 |
+| b2 m2 mean | 21.182 | 26.910 | 34 | 4417 | +2.448 | +637 | −30 | 4099 | 4869 |
+| b2 m2 none | 21.912 | 27.455 | 47 | 4707 | +3.179 | +927 | −38 | 4094 | 4864 |
+| b4 m2 none | 21.979 | 27.716 | 52 | 4741 | +3.246 | +961 | −5 | 4995 | 5934 |
+| b2 m1 none | 80.108 | 82.423 | 224 | 22798 | +61.374 | +19018 | −377 | 4086 | 4854 |
+
+**Every config is worse, and `dDel` is positive for every one of them.** The beam was predicted to
+drive deletions down; it drives them up. That is a falsification of the mechanism, not a tuning miss.
+
+Wall clock was never the binding constraint — beam2 1.05x, beam4 1.28x greedy, both inside B1d.
+
+### Why — and why it matters more than the null result
+
+`length_norm=mean` behaves exactly as designed: −0.73 pt at beam 2, −1.72 pt at beam 4, and empties
+48 → 28. It is fighting the length bias and winning ground. It just cannot win enough, because the
+deletions the beam adds *inside non-empty output* outweigh the empties it saves — and per S0 the
+empties were only 3.89 points to begin with.
+
+The mechanism: **greedy is not an approximation to the maximum-probability path — for this model on
+this data it is a better estimator than the thing it approximates.** Greedy has no score at all; it
+takes a per-step argmax and never pays for blank. A correctly-scored beam does pay, and RNN-T path
+probability is structurally biased toward short output because every extra token multiplies in
+another sub-1 probability. Searching *harder* finds higher-probability paths that are *worse*
+transcripts.
+
+**So the model's path posterior is miscalibrated toward blank on dysarthric speech.** No decode-time
+search can fix a miscalibrated posterior — search only finds what the posterior already ranks
+highest. This is the strongest evidence yet that the remaining CER is a **training** problem.
+
+### Open — not diagnosed
+
+`beam_max_symbols=1` collapses to 27% of greedy's words and 224 empties (`dDel +19018`). Direction is
+explicable (blank preference compounded by a 1-emission-per-frame cap against a model that emits in
+bursts; each step decodes ~2 encoder frames given `chunk=[9,16]`, 8x subsampling, `valid_out_len=2`).
+**Magnitude is not.** Ruled out: ORT output-buffer aliasing across hypotheses — that was the first
+theory and it would have broken every beam config, not one; `beam=2/m2` and `beam=4/m2` produce
+sane-length output. The local test asserted the cap at 1 vs 2 emissions and passed, so the cap is
+implemented as specified. No working theory for the 4x collapse. Config is dead either way.
+
+### What this closes and what it points at
+
+Decode-time levers on the CER axis are now **exhausted**: blank penalty (S1 NO-GO), beam search
+(here), `input_gain` (0/48), joint unfreeze (D1). Four independent attacks.
+
+Untried and cheap, pointed at by the rate finding rather than by the beam: **time-compress slow audio
+before the front end** so the model sees a familiar frame-per-word ratio. Decode-time, no retraining,
+aimed at the axis that actually carries the 4x gradient.
+
+For training: sample or augment toward **slow** speech, not toward long utterances.

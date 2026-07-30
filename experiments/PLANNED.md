@@ -67,8 +67,8 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 |---|---|---|---|---|---|
 | **S0** | Official-scorer error decomposition | CPU pod (data lives there) | ~0, minutes | **done 2026-07-30** → `EXPERIMENT_LOG.md` `exp_s0_s1_probe` | empties = **3.89** CER pts (not 11.29); deletions **13.04** of 18.73; **51% of error mass is 13+ word utts** |
 | **S1** | Blank-penalty probe + sweep | S0 shares the session | 11 min spent of ~4.5 h budgeted | **NO-GO 2026-07-30, grid not run** | empties are MORE confidently blank (p10 margin 6.35 vs 2.61); β≈6 needed, flips 27% of all blanks |
-| **S2a** | Deletion localization (position / runs / rate) | S0 alignments; no decode | ~0, minutes | **ready** — `investigations/step02_runbook.md` | position histogram + run lengths + spearman(CER, rate vs word count) → names M1/M2/M3 |
-| **S2c** | RNN-T beam grid on the shipped fp32 artifact | S2a must not read M3 | ~3 h CPU pod ≈ $9 | **ready, gated** | Dev_diag CER ≤ 18.43 (B1) or ≤ 17.73 at ≤1000 ms (B2); hard DQ at proj. wall-clock > 12000 s |
+| **S2a** | Deletion localization (position / runs / rate) | S0 alignments; no decode | ~0, minutes | **done 2026-07-30** → `EXPERIMENT_LOG.md` `exp_s2_beam` | positions FLAT, runs 62.7% singletons → M3 + left-context exhaustion FALSIFIED; CER tracks speaking RATE (4x, spearman −0.254) not word count (+0.027) |
+| **S2c** | RNN-T beam grid on the shipped fp32 artifact | S2a green | ~1h50m spent, ≈$8 | **FALSIFIED 2026-07-30** | every config worse than greedy (best 20.256 vs 18.733); `dDel` POSITIVE for all — beam ADDS deletions. Keep `beam: 1` |
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
 | **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **done 2026-07-29 — FALSIFIED** → `EXPERIMENT_LOG.md` `exp_armB_parakeet` | severe CER 18.69% → **18.74%** (worse), empties **48 → 50** |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |
@@ -124,8 +124,29 @@ short-output bias that *is* our failure mode. It is the mechanically correct for
 blank penalty applied by brute force. Ships `beam: 1` = byte-identical greedy; a `parity` stage proves
 that on-pod before anything else runs.
 
-**Kill.** S2a reads M3 (rising positions + long runs) → a beam cannot fix state drift; do not spend
-the grid. Or no config clears B1/B2 → keep `beam: 1`, report the curve, submit nothing.
+**OUTCOME 2026-07-30 — S2a green, S2c FALSIFIED.** S2a read **flat + singletons** (M2), so the grid
+was authorised by the pre-registered table and run. Every config came back **worse than greedy**
+(best 20.256 vs 18.733) with **`dDel` positive for all of them** — the beam *adds* deletions. Kill
+condition "no config clears B1/B2" fired: `beam: 1` retained, nothing submitted, pod stopped.
+
+Two things outlived the null result:
+
+1. **The rate finding.** CER tracks speaking rate (spearman −0.254; Q1 40.14% vs Q4 10.31%, a 4x
+   gradient) and *not* word count (+0.027). Inside the 13+ bucket, slow 19.76% vs fast 9.19%. The
+   "51% of error mass is 13+ word utts" line above is a **mass** statistic, not a difficulty one.
+   The axis is slow speech, not long speech.
+2. **Why search cannot help.** `length_norm=mean` works as designed (−1.72 pt at beam 4, empties
+   48→28) and still loses, because greedy has no score at all while a correctly-scored beam pays for
+   every blank, and RNN-T path probability is structurally biased toward short output. Searching
+   harder finds higher-probability paths that are worse transcripts — i.e. **the posterior is
+   miscalibrated toward blank**, and no decode-time search fixes a miscalibrated posterior.
+
+**Decode-time levers on the CER axis are now exhausted**: blank penalty (S1), beam (S2c),
+`input_gain` (0/48), joint unfreeze (D1). Four independent attacks. The remaining CER is a training
+problem — which is what D1–D5 were for, now with a correctly identified target (slow speech).
+
+**Untried, cheap, and pointed at by the rate finding rather than the beam:** time-compress slow audio
+before the front end so the model sees a familiar frame-per-word ratio. Decode-time, no retraining.
 
 **Kill (S1).** Probe NO-GO, or no β satisfies the pre-registered rule → keep `blank_penalty: 0.0`, and the
 next spend is the GPU session (resume the un-converged Arm B curve × FastEmit λ sweep × top-k

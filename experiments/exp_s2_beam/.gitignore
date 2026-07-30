@@ -1,0 +1,5 @@
+# Full decompositions and pod logs carry SAP reference + hypothesis text (licensed).
+# The .summary.json files beside them have that text stripped and are what we commit.
+decomp_Dev_diag.*.json
+!decomp_Dev_diag.*.summary.json
+*.log
