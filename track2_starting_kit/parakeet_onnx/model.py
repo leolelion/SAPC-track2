@@ -225,6 +225,22 @@ class Model:
             _ms = meta.get("max_symbols_per_step") or 10
         self._max_symbols = int(_env("SAPC2_MAX_SYMBOLS", _ms))
 
+        # --- blank-logit penalty. SHIPS 0.0 = decode byte-identical to the scored
+        # submission; a non-zero value must never leave a pod without an official
+        # evaluate.sh number behind it.
+        # Why it exists: the official error profile is deletion-dominated (Dev val-2000:
+        # del 24.76% / sub 5.87% / ins 1.38%, i.e. del:ins ~18:1) — the joint over-emits
+        # blank on this data. Subtracting a constant from the blank logit before the
+        # argmax is the standard counter-pressure. It is available to us ONLY because
+        # this wrapper hand-rolls the greedy loop (_decode_frames); NeMo's greedy_batch,
+        # which the .nemo path is pinned to, exposes no per-step logit hook.
+        # NB a softmax temperature would be a NO-OP here: argmax(z/T) == argmax(z) for
+        # T > 0. An additive shift on one class is the only knob greedy argmax can see.
+        # Env SAPC2_BLANK_PENALTY wins over config, as elsewhere in this file.
+        self._blank_penalty = float(
+            _env("SAPC2_BLANK_PENALTY", dec_cfg.get("blank_penalty", 0.0) or 0.0)
+        )
+
         # --- output normalisation: strip <EOU> and friends (research/46: 100/123 sweep
         # hyps carried <EOU>). Never emit a special token to the scorer. ---
         out_cfg = (_CONFIG.get("output") or {})
@@ -315,6 +331,7 @@ class Model:
             f"valid_out_len={self._valid_out_len} drop_policy={self._drop_policy} "
             f"trim_policy={self._trim_policy} blank={self._blank_id} "
             f"max_symbols={self._max_symbols} vocab={len(self._vocab)} "
+            f"blank_penalty={self._blank_penalty} "
             f"input_gain={'on' if self._gain_on else 'off'})",
             flush=True,
         )
@@ -622,7 +639,12 @@ class Model:
                 raw = self._dec.run(None, feeds)
                 out = dict(zip(self._dec_out_names, raw))
                 logits = out.get("outputs", raw[0])  # [B, 1, 1, V]
-                token = int(np.argmax(np.asarray(logits).reshape(-1)))
+                flat = np.asarray(logits).reshape(-1)
+                if self._blank_penalty:
+                    # copy so the ORT output buffer is never written through
+                    flat = flat.astype(np.float32, copy=True)
+                    flat[self._blank_id] -= self._blank_penalty
+                token = int(np.argmax(flat))
                 if token == self._blank_id:
                     break
                 self._tokens.append(token)

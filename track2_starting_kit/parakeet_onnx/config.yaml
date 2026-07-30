@@ -45,6 +45,17 @@ decoding:
   # Set a number here only to override it deliberately; env SAPC2_MAX_SYMBOLS wins over both.
   max_symbols_per_step: null
 
+  # Constant subtracted from the BLANK logit before the greedy argmax. 0.0 = the decode
+  # path of the submission that scored Test1 CER 19.01%, unchanged.
+  # Rationale and sweep protocol: investigations/step01_runbook.md. The official error
+  # profile is deletion-dominated (del:ins ~18:1), so the joint over-emits blank; this is
+  # the counter-pressure, and it is the only knob greedy argmax can see (a temperature
+  # cancels out of an argmax). Raising it trades insertions for deletions and emits
+  # earlier, so it moves CER AND TTFT — re-measure both, never assume.
+  # Do not ship a non-zero value that has not been through evaluate.sh on two Dev slices.
+  # Env SAPC2_BLANK_PENALTY overrides.
+  blank_penalty: 0.0
+
 output:
   # parakeet_realtime emits <EOU>; research/46 saw it on 100/123 sweep hyps. Strip
   # special tokens in the wrapper — NEVER in the scorer (house rule), and never emit
