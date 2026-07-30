@@ -1,0 +1,76 @@
+[load] 425 utterances; sample rates [16000]
+
+=== C1 target vs all other speakers   (target n=28, control n=397) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -34.968      -25.407     -9.561   0.12  STRONG
+peak_dbfs                 -6.976       -4.403     -2.573   0.41  
+clip_frac                  0.000        0.000     +0.000   0.55  
+dc_offset                 -0.000       -0.000     +0.000   0.50  
+noise_floor_dbfs         -65.291      -69.922     +4.631   0.66  
+speech_dbfs              -40.602      -20.781    -19.821   0.06  STRONG
+snr_db                    24.740       48.939    -24.199   0.03  STRONG
+speech_activity            0.380        0.603     -0.222   0.14  STRONG
+lead_silence_s             0.140        0.020     +0.120   0.63  
+centroid_hz              214.990      567.096   -352.106   0.06  STRONG
+hf_lf_ratio_db           -33.198      -23.698     -9.499   0.21  
+  separating descriptors (AUC>=0.80 or <=0.20): ['rms_dbfs', 'speech_dbfs', 'snr_db', 'speech_activity', 'centroid_hz']
+
+=== C2 target vs same-etiology (ALS) speakers   (target n=28, control n=82) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -34.968      -24.706    -10.262   0.10  STRONG
+peak_dbfs                 -6.976       -3.785     -3.191   0.35  
+clip_frac                  0.000        0.000     +0.000   0.51  
+dc_offset                 -0.000       -0.000     +0.000   0.55  
+noise_floor_dbfs         -65.291      -69.269     +3.978   0.72  
+speech_dbfs              -40.602      -19.990    -20.612   0.05  STRONG
+snr_db                    24.740       49.797    -25.057   0.03  STRONG
+speech_activity            0.380        0.654     -0.273   0.10  STRONG
+lead_silence_s             0.140        0.020     +0.120   0.56  
+centroid_hz              214.990      624.944   -409.954   0.03  STRONG
+hf_lf_ratio_db           -33.198      -23.548     -9.650   0.23  
+  separating descriptors (AUC>=0.80 or <=0.20): ['rms_dbfs', 'speech_dbfs', 'snr_db', 'speech_activity', 'centroid_hz']
+
+=== C3 empty vs non-empty (corpus-wide)   (target n=48, control n=377) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -29.138      -25.487     -3.651   0.31  
+peak_dbfs                 -6.132       -4.373     -1.759   0.41  
+clip_frac                  0.000        0.000     +0.000   0.53  
+dc_offset                 -0.000       -0.000     +0.000   0.52  
+noise_floor_dbfs         -65.946      -69.665     +3.719   0.57  
+speech_dbfs              -31.200      -20.940    -10.260   0.27  
+snr_db                    37.668       48.939    -11.271   0.25  
+speech_activity            0.420        0.608     -0.189   0.24  
+lead_silence_s             0.080        0.020     +0.060   0.57  
+centroid_hz              368.770      563.557   -194.786   0.31  
+hf_lf_ratio_db           -29.583      -23.776     -5.806   0.31  
+  separating descriptors (AUC>=0.80 or <=0.20): NONE
+  -> this contrast finds NO acoustic signature. Do not invent one from the medians.
+
+=== C4 target's empties vs target's non-empties   (target n=21, control n=7) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -34.390      -36.146     +1.756   0.67  
+peak_dbfs                 -6.778       -7.173     +0.394   0.56  
+clip_frac                  0.000        0.000     +0.000   0.62  
+dc_offset                 -0.000       -0.000     +0.000   0.52  
+noise_floor_dbfs         -64.877      -66.254     +1.377   0.63  
+speech_dbfs              -39.853      -43.676     +3.823   0.76  
+snr_db                    25.634       22.438     +3.196   0.75  
+speech_activity            0.408        0.341     +0.066   0.76  
+lead_silence_s             0.100        0.220     -0.120   0.33  
+centroid_hz              213.199      216.781     -3.582   0.44  
+hf_lf_ratio_db           -35.123      -27.388     -7.735   0.32  
+  separating descriptors (AUC>=0.80 or <=0.20): NONE
+  -> this contrast finds NO acoustic signature. Do not invent one from the medians.
+
+=== READING GUIDE ===
+  C1+C2 strong, C3 flat  -> that speaker's RECORDING SESSION. Fix is data-side or
+                            per-speaker; it will not generalise to Test.
+  C1+C2 strong, C3 strong-> a FRONT-END gap that also drives the corpus empties.
+                            Highest value: one fix, two problems.
+  C1+C2 flat             -> the audio is in-family; the failure is in the MODEL for
+                            this talker. No front-end fix exists. Needs training data.
+  C4 strong              -> within this speaker, the empties are acoustically distinct
+                            -> a per-utterance trigger exists, not a per-speaker one.
+
+wrote /workspace/artifacts/step03/speaker_forensics.json
+SPEAKER_FORENSICS_DONE

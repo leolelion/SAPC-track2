@@ -1,0 +1,23 @@
+{
+  "nemo": "/workspace/sweep/parakeet120.nemo",
+  "contexts": [
+    [
+      70,
+      1
+    ]
+  ],
+  "structural": {
+    "att_context_size": "[70, 1]",
+    "att_context_probs": [
+      1.0
+    ],
+    "att_context_style": "chunked_limited",
+    "conv_context_size": "causal",
+    "self_attention_model": "rel_pos",
+    "n_layers": 17,
+    "d_model": 512,
+    "subsampling": "dw_striding",
+    "subsampling_factor": 8,
+    "trained_multi_context": false
+  }
+}

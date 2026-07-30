@@ -819,3 +819,147 @@ before the front end** so the model sees a familiar frame-per-word ratio. Decode
 aimed at the axis that actually carries the 4x gradient.
 
 For training: sample or augment toward **slow** speech, not toward long utterances.
+
+---
+
+## exp_s3_phase0_strat — 2026-07-30 — rate/speaker stratification of the banked runs (local, $0)
+
+**Commit** `8e464f0` · no pod · `scripts/analyze_rate_and_speakers.py`
+**Artifact** the banked `decomp_*.summary.json` from `exp_s0_s1_probe` and `exp_s2_beam`
+**Verdict** three corrections to what this repo believed. Nothing submitted.
+
+The analyzer re-reads the per-utterance records `error_decomposition.py` already banked
+(`ref_chars` / `errors` / `duration` / `speaker` / `char_ops`, reference text stripped) and
+**self-gates on reconstructing the official micro CER from them: delta 0.0e+00** against 18.7332%.
+No pod, no data, no decode.
+
+### 1. The rate axis is real, and smaller than the handoff implied
+
+| bucket | n | rate (ref char/s) | CER% | 95% CI | pts | ref% | err% | charD | empty |
+|---|---|---|---|---|---|---|---|---|---|
+| Q1 slowest | 107 | 0.9–3.0 | 39.70 | [33.4, 46.6] | 3.69 | 9.3 | 19.7 | 858 | 20 |
+| Q2 | 106 | 3.1–4.8 | 31.03 | [24.0, 38.7] | 5.14 | 16.6 | 27.4 | 1155 | 15 |
+| Q3 | 106 | 4.8–7.2 | 18.19 | [13.7, 23.5] | 5.22 | 28.7 | 27.9 | 1012 | 8 |
+| Q4 fastest | 106 | 7.2–14.3 | 10.31 | [8.2, 12.7] | 4.69 | 45.4 | 25.0 | 755 | 5 |
+
+The 3.9x difficulty gradient holds. But **error mass is flat** and the slow quartile carries only
+**9.3% of reference characters**, so fixing Q1 perfectly is worth **−3.69 points** and fixing it to
+Q4's level ≈ **−2.7**. Every rate-targeted lever is capped there; **74% of the characters are in
+Q3+Q4**.
+
+> Rate is a **difficulty** statistic. Reading it as a mass statistic would be the mirror image of
+> the retracted "51% of error mass is 13+ word utterances" claim, which was a mass statistic read as
+> a difficulty one. Same error, opposite direction.
+
+### 2. Dev_diag's noise floor
+
+Whole-set **unpaired 95% CI [16.26, 21.63]** — ±2.7 points on n=425. Paired resolves ~±1.5. Any
+verdict in this repo's history decided on a sub-point unpaired difference was inside noise (D1's
+"−0.05 worse" is a null, not a falsification). All gates from here on are paired.
+
+### 3. The beam falsification does not survive stratification
+
+Paired bootstrap, `b4m2mean` vs greedy, on the banked `exp_s2_beam` artifacts:
+
+| bucket | greedy | beam4+mean | delta | 95% CI |
+|---|---|---|---|---|
+| Q1 slowest | 39.70 | 34.05 | **−5.65** | [−8.85, −2.72] |
+| Q2 | 31.03 | 27.87 | **−3.15** | [−5.79, −0.76] |
+| Q3 | 18.19 | 22.01 | +3.82 | [+0.63, +7.45] |
+| Q4 fastest | 10.31 | 13.58 | +3.27 | [+1.23, +5.61] |
+
+The whole-set **+1.52 was two opposite effects cancelling.** Length-normalised beam is the right
+decode for slow speech and the wrong one for fast speech, and fast speech holds the characters.
+
+Fast-quartile damage is significant in **8/8** configs tested — solid. The slow-quartile benefit is
+significant in **1 of 4** (`b4m2none` −3.04 marginal, `b2m2mean` −0.73 n.s., `b2m2none` +1.70 n.s.),
+and with 16 tests at 95% one false positive is expected. **Hypothesis (H-G), not a result.** Oracle
+value of perfect rate-switching ≈ **−1.05 points**, and any real version needs an online rate
+estimator, since the quartiles here are reference-derived.
+
+**`beam: 1` still ships.** Nothing here changes the shipped artifact.
+
+---
+
+## exp_s3_ha_hf — 2026-07-30 — H-A lookahead re-export + H-F speaker forensics
+
+**Commit** `8e464f0` · pod `3dwiczo41jeg1y` (H200, $4.39/h), 20:48–21:01 UTC ≈ **13 min ≈ $1.00**
+against a budgeted $5.50–7.70 — the kill gate fired early, which is what it was for.
+**Verdict** **H-A retired** at its assumed cost. **H-F: no front-end fix exists.** Nothing submitted.
+
+### H-A — G-HA0 KILL, on both questions
+
+`scripts/probe_lookahead_support.py` separates "was it trained multi-context" from "does it still
+transcribe there", because `set_default_att_context_size()` accepts any context on a cache-aware
+encoder and that is not evidence the weights support it.
+
+**Structural.** Arm A declares `att_context_size [70,1]`, `att_context_probs [1.0]`,
+`att_context_style chunked_limited`, `conv_context_size causal`, 17 layers, d_model 512,
+subsampling factor 8. NeMo states it directly:
+`att_context_size=[70, 3] is not among the list of the supported look-aheads: [[70, 1]]`.
+
+**Functional screen** (30 utts, offline transcribe, punct-stripped single-ref PROXY, kill-only):
+
+| context | proxy CER% | empty | vs [70,1] |
+|---|---|---|---|
+| [70,1] | 39.89 | 4 | — |
+| [70,3] | 43.42 | 5 | +3.54 |
+| [70,6] | 53.99 | 10 | +14.10 |
+| [70,13] | 71.70 | 18 | +31.81 |
+
+Monotone collapse; nothing within the pre-registered +3.0 proxy points. Export, ONNX parity, decode
+and scoring were never spent.
+
+**The follow-up that decides the cost of the GPU arm** (2 extra minutes, deliberate): the **base**
+`/workspace/sweep/parakeet120.nemo` is **also** `[70,1]` / `probs [1.0]`. Our single-context
+finetune did **not** destroy a multi-lookahead capability — `parakeet_realtime_eou_120m` is natively
+an 80 ms-only model. So H-A is not "retrain pinned at [70,3]" on this checkpoint; it means training
+a lookahead the base has never had, or changing base to the multi-lookahead FastConformer-114M
+(`exp_sweep_fc114_480_devstream`: 33.75 zero-shot @ 480 ms). A different and much larger bet.
+
+> The premise survives even though the lever died: right context is still the only thing that can
+> reach Q3+Q4. What died is the claim that this checkpoint could be re-exported into it.
+
+### H-F — speaker `55c1784a`, 14.1% of all error mass, LOO shift −2.14 pts
+
+`scripts/probe_speaker_audio.py`, 425 utterances, all 16 kHz. AUC = P(random target > random
+control); ≤0.20 or ≥0.80 = strong.
+
+**C2, target vs same-etiology (ALS) controls:**
+
+| descriptor | target med | control med | AUC |
+|---|---|---|---|
+| snr_db | 24.74 | 49.80 | **0.03** |
+| centroid_hz | 214.99 | 624.94 | **0.03** |
+| speech_dbfs | −40.60 | −19.99 | **0.05** |
+| rms_dbfs | −34.97 | −24.71 | **0.10** |
+| speech_activity | 0.380 | 0.654 | **0.10** |
+| peak_dbfs | −6.98 | −3.79 | 0.35 |
+| lead_silence_s | 0.140 | 0.020 | 0.56 |
+| clip_frac / dc_offset | 0.000 | 0.000 | 0.51 / 0.55 |
+
+C1 (vs all 397 other utterances) reproduces the same five separators. **C3 (empty vs non-empty
+corpus-wide): NONE.** **C4 (its empties vs its own non-empties): NONE.**
+
+**Reading.** C3 flat means this is not the mechanism behind the other 48 empties — one speaker's
+problem, not a corpus-wide front-end gap. C4 flat means the whole speaker is uniformly affected and
+there is **no per-utterance trigger to detect at runtime**.
+
+The load-bearing detail is **`peak_dbfs` does not separate (0.35) while `speech_dbfs` separates hard
+(0.05)**. A gain or microphone problem scales peaks down with everything else. This one does not:
+normal peaks, RMS 10 dB down, speech activity 0.38, spectral energy collapsed below ~215 Hz. That is
+intermittent low-amplitude phonation with bursts reaching normal level — severe hypophonic ALS
+speech, not a bad channel. It also explains cleanly why the frozen-scalar `input_gain` recovered
+**0/48** empties: there was no gain deficit to correct.
+
+**The runbook's decision tree did not have a clean branch for this.** It assumed "acoustically
+extreme" implied "recording artifact". The honest reading is the third branch — the audio is
+genuine, the model fails this talker, and **no front-end fix exists**. 2.14 CER points reachable
+only by training data. And because it is physiology rather than a session artifact, similar speakers
+plausibly do appear in Test.
+
+### Files
+
+`experiments/exp_s3_ha_hf/` — `speaker_forensics.{json,log}`, `lookahead_probe.{json,log}`,
+`base_lookahead_probe.json`, `session.log`. All numbers only; verified free of reference and
+hypothesis text before committing.

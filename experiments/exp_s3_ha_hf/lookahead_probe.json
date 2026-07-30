@@ -1,0 +1,60 @@
+{
+  "nemo": "/workspace/parakeet_ft/armA_full/ft_smoke_encoder_only.nemo",
+  "contexts": [
+    [
+      70,
+      1
+    ],
+    [
+      70,
+      3
+    ],
+    [
+      70,
+      6
+    ],
+    [
+      70,
+      13
+    ]
+  ],
+  "structural": {
+    "att_context_size": "[70, 1]",
+    "att_context_probs": [
+      1.0
+    ],
+    "att_context_style": "chunked_limited",
+    "conv_context_size": "causal",
+    "self_attention_model": "rel_pos",
+    "n_layers": 17,
+    "d_model": 512,
+    "subsampling": "dw_striding",
+    "subsampling_factor": 8,
+    "trained_multi_context": false
+  },
+  "screen": {
+    "[70, 1]": {
+      "proxy_cer": 0.3988722995017305,
+      "empty": 4,
+      "delta_vs_first": 0.0
+    },
+    "[70, 3]": {
+      "proxy_cer": 0.43424967361989336,
+      "empty": 5,
+      "delta_vs_first": 0.035377374118162885
+    },
+    "[70, 6]": {
+      "proxy_cer": 0.5398821908275309,
+      "empty": 10,
+      "delta_vs_first": 0.14100989132580038
+    },
+    "[70, 13]": {
+      "proxy_cer": 0.7169924476967822,
+      "empty": 18,
+      "delta_vs_first": 0.3181201481950517
+    }
+  },
+  "survivors_G_HA0": [
+    "[70, 1]"
+  ]
+}

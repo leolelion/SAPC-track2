@@ -1,0 +1,191 @@
+[preflight] repo=/workspace/SAPC-step01 data=/workspace/SAPC2 art=/workspace/artifacts/step03 contexts='70,3 70,6 70,13' stages='forensics probe'
+
+=========== H-F: acoustic forensics on speaker 55c1784a (20:51:08) ===========
+[load] 425 utterances; sample rates [16000]
+
+=== C1 target vs all other speakers   (target n=28, control n=397) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -34.968      -25.407     -9.561   0.12  STRONG
+peak_dbfs                 -6.976       -4.403     -2.573   0.41  
+clip_frac                  0.000        0.000     +0.000   0.55  
+dc_offset                 -0.000       -0.000     +0.000   0.50  
+noise_floor_dbfs         -65.291      -69.922     +4.631   0.66  
+speech_dbfs              -40.602      -20.781    -19.821   0.06  STRONG
+snr_db                    24.740       48.939    -24.199   0.03  STRONG
+speech_activity            0.380        0.603     -0.222   0.14  STRONG
+lead_silence_s             0.140        0.020     +0.120   0.63  
+centroid_hz              214.990      567.096   -352.106   0.06  STRONG
+hf_lf_ratio_db           -33.198      -23.698     -9.499   0.21  
+  separating descriptors (AUC>=0.80 or <=0.20): ['rms_dbfs', 'speech_dbfs', 'snr_db', 'speech_activity', 'centroid_hz']
+
+=== C2 target vs same-etiology (ALS) speakers   (target n=28, control n=82) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -34.968      -24.706    -10.262   0.10  STRONG
+peak_dbfs                 -6.976       -3.785     -3.191   0.35  
+clip_frac                  0.000        0.000     +0.000   0.51  
+dc_offset                 -0.000       -0.000     +0.000   0.55  
+noise_floor_dbfs         -65.291      -69.269     +3.978   0.72  
+speech_dbfs              -40.602      -19.990    -20.612   0.05  STRONG
+snr_db                    24.740       49.797    -25.057   0.03  STRONG
+speech_activity            0.380        0.654     -0.273   0.10  STRONG
+lead_silence_s             0.140        0.020     +0.120   0.56  
+centroid_hz              214.990      624.944   -409.954   0.03  STRONG
+hf_lf_ratio_db           -33.198      -23.548     -9.650   0.23  
+  separating descriptors (AUC>=0.80 or <=0.20): ['rms_dbfs', 'speech_dbfs', 'snr_db', 'speech_activity', 'centroid_hz']
+
+=== C3 empty vs non-empty (corpus-wide)   (target n=48, control n=377) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -29.138      -25.487     -3.651   0.31  
+peak_dbfs                 -6.132       -4.373     -1.759   0.41  
+clip_frac                  0.000        0.000     +0.000   0.53  
+dc_offset                 -0.000       -0.000     +0.000   0.52  
+noise_floor_dbfs         -65.946      -69.665     +3.719   0.57  
+speech_dbfs              -31.200      -20.940    -10.260   0.27  
+snr_db                    37.668       48.939    -11.271   0.25  
+speech_activity            0.420        0.608     -0.189   0.24  
+lead_silence_s             0.080        0.020     +0.060   0.57  
+centroid_hz              368.770      563.557   -194.786   0.31  
+hf_lf_ratio_db           -29.583      -23.776     -5.806   0.31  
+  separating descriptors (AUC>=0.80 or <=0.20): NONE
+  -> this contrast finds NO acoustic signature. Do not invent one from the medians.
+
+=== C4 target's empties vs target's non-empties   (target n=21, control n=7) ===
+descriptor            target med  control med      delta    AUC  flag
+rms_dbfs                 -34.390      -36.146     +1.756   0.67  
+peak_dbfs                 -6.778       -7.173     +0.394   0.56  
+clip_frac                  0.000        0.000     +0.000   0.62  
+dc_offset                 -0.000       -0.000     +0.000   0.52  
+noise_floor_dbfs         -64.877      -66.254     +1.377   0.63  
+speech_dbfs              -39.853      -43.676     +3.823   0.76  
+snr_db                    25.634       22.438     +3.196   0.75  
+speech_activity            0.408        0.341     +0.066   0.76  
+lead_silence_s             0.100        0.220     -0.120   0.33  
+centroid_hz              213.199      216.781     -3.582   0.44  
+hf_lf_ratio_db           -35.123      -27.388     -7.735   0.32  
+  separating descriptors (AUC>=0.80 or <=0.20): NONE
+  -> this contrast finds NO acoustic signature. Do not invent one from the medians.
+
+=== READING GUIDE ===
+  C1+C2 strong, C3 flat  -> that speaker's RECORDING SESSION. Fix is data-side or
+                            per-speaker; it will not generalise to Test.
+  C1+C2 strong, C3 strong-> a FRONT-END gap that also drives the corpus empties.
+                            Highest value: one fix, two problems.
+  C1+C2 flat             -> the audio is in-family; the failure is in the MODEL for
+                            this talker. No front-end fix exists. Needs training data.
+  C4 strong              -> within this speaker, the empties are acoustically distinct
+                            -> a per-utterance trigger exists, not a per-speaker one.
+
+wrote /workspace/artifacts/step03/speaker_forensics.json
+SPEAKER_FORENSICS_DONE
+[H-F] done -> /workspace/artifacts/step03/speaker_forensics.json  (read the READING GUIDE block)
+
+=========== H-A/G-HA0: structural + functional lookahead probe (20:51:17) ===========
+[NeMo W 2026-07-30 20:54:13 megatron_init:62] Megatron num_microbatches_calculator not found, using Apex version.
+OneLogger: Setting error_handling_strategy to DISABLE_QUIETLY_AND_REPORT_METRIC_ERROR for rank (rank=0) with OneLogger disabled. To override: explicitly set error_handling_strategy parameter.
+No exporters were provided. This means that no telemetry data will be collected.
+[NeMo W 2026-07-30 20:54:56 nemo_logging:364] /workspace/nemoenv/lib/python3.11/site-packages/pydub/utils.py:170: RuntimeWarning: Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work
+      warn("Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work", RuntimeWarning)
+    
+=== restore /workspace/parakeet_ft/armA_full/ft_smoke_encoder_only.nemo ===
+[NeMo I 2026-07-30 20:55:13 mixins:184] Tokenizer SentencePieceTokenizer initialized with 1026 tokens
+[NeMo W 2026-07-30 20:55:14 modelPT:188] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config : 
+    sample_rate: 16000
+    batch_size: 16
+    num_workers: 8
+    pin_memory: true
+    use_lhotse: false
+    is_tarred: false
+    max_duration: 40.0
+    min_duration: 0.1
+    trim_silence: false
+    shuffle_n: 2048
+    manifest_filepath: /workspace/nemo_ft/train.json
+    shuffle: true
+    augmentor:
+      gain:
+        prob: 0.5
+        min_gain_dbfs: -20.0
+        max_gain_dbfs: 10.0
+      speed:
+        prob: 0.5
+        sr: 16000
+        resample_type: kaiser_best
+        min_speed_rate: 0.9
+        max_speed_rate: 1.1
+    
+[NeMo W 2026-07-30 20:55:14 modelPT:195] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s). 
+    Validation config : 
+    sample_rate: 16000
+    batch_size: 16
+    num_workers: 4
+    pin_memory: true
+    use_lhotse: false
+    is_tarred: false
+    max_duration: 40.0
+    min_duration: 0.1
+    trim_silence: false
+    shuffle_n: 2048
+    manifest_filepath: /workspace/nemo_ft/val.json
+    shuffle: false
+    
+[NeMo I 2026-07-30 20:55:16 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.03, 'clamp': -1.0}
+[NeMo I 2026-07-30 20:55:16 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.03, 'clamp': -1.0}
+[NeMo I 2026-07-30 20:55:16 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.03, 'clamp': -1.0}
+[NeMo I 2026-07-30 20:55:17 save_restore_connector:285] Model EncDecRNNTBPEModel was successfully restored from /workspace/parakeet_ft/armA_full/ft_smoke_encoder_only.nemo.
+[NeMo W 2026-07-30 20:55:17 dataloader:826] The following configuration keys are ignored by Lhotse dataloader: use_start_end_token
+[NeMo W 2026-07-30 20:55:17 dataloader:523] You are using a non-tarred dataset and requested tokenization during data sampling (pretokenize=True). This will cause the tokenization to happen in the main (GPU) process,possibly impacting the training speed if your tokenizer is very large.If the impact is noticable, set pretokenize=False in dataloader config.(note: that will disable token-per-second filtering and 2D bucketing features)
+=== Q1 STRUCTURAL ===
+  att_context_size         [70, 1]
+  att_context_probs        [1.0]
+  att_context_style        chunked_limited
+  conv_context_size        causal
+  self_attention_model     rel_pos
+  n_layers                 17
+  d_model                  512
+  subsampling              dw_striding
+  subsampling_factor       8
+  trained_multi_context    False
+  VERDICT: config declares ONE context. Larger lookahead is OUT OF DISTRIBUTION.
+           H-A becomes a GPU arm (retrain pinned at the new context), not a re-export.
+  att_context_probs present: [1.0]
+
+=== Q2 FUNCTIONAL SCREEN (offline transcribe, n=30, PROXY -- kill-only) ===
+context       proxy CER%  empty  vs [70,1]
+Transcribing: 0it [00:00, ?it/s][NeMo W 2026-07-30 20:55:26 timestamp_utils:251] Specified segment seperators are not in supported punctuation {"'"}. If the seperators are not punctuation marks, ignore this warning. Otherwise, specify 'segment_gap_threshold' parameter in decoding config to form segments.
+Transcribing: 1it [00:09,  9.21s/it]Transcribing: 2it [00:17,  8.85s/it]Transcribing: 3it [00:25,  8.42s/it]Transcribing: 4it [00:32,  7.94s/it]Transcribing: 4it [00:33,  8.25s/it]
+[NeMo W 2026-07-30 20:55:50 conformer_encoder:918] att_context_size=[70, 3] is not among the list of the supported look-aheads: [[70, 1]]
+[NeMo W 2026-07-30 20:55:50 dataloader:826] The following configuration keys are ignored by Lhotse dataloader: use_start_end_token
+[NeMo W 2026-07-30 20:55:50 dataloader:523] You are using a non-tarred dataset and requested tokenization during data sampling (pretokenize=True). This will cause the tokenization to happen in the main (GPU) process,possibly impacting the training speed if your tokenizer is very large.If the impact is noticable, set pretokenize=False in dataloader config.(note: that will disable token-per-second filtering and 2D bucketing features)
+[70, 1]            39.89      4      +0.00
+Transcribing: 0it [00:00, ?it/s]Transcribing: 1it [00:13, 13.08s/it]Transcribing: 2it [00:22, 10.79s/it]Transcribing: 3it [00:27,  8.47s/it]Transcribing: 4it [00:31,  6.59s/it]Transcribing: 4it [00:31,  7.92s/it]
+[NeMo W 2026-07-30 20:56:22 conformer_encoder:918] att_context_size=[70, 6] is not among the list of the supported look-aheads: [[70, 1]]
+[NeMo W 2026-07-30 20:56:22 dataloader:826] The following configuration keys are ignored by Lhotse dataloader: use_start_end_token
+[NeMo W 2026-07-30 20:56:22 dataloader:523] You are using a non-tarred dataset and requested tokenization during data sampling (pretokenize=True). This will cause the tokenization to happen in the main (GPU) process,possibly impacting the training speed if your tokenizer is very large.If the impact is noticable, set pretokenize=False in dataloader config.(note: that will disable token-per-second filtering and 2D bucketing features)
+[70, 3]            43.42      5      +3.54
+Transcribing: 0it [00:00, ?it/s]Transcribing: 1it [00:07,  7.18s/it]Transcribing: 2it [00:15,  7.96s/it]Transcribing: 3it [00:21,  7.07s/it]Transcribing: 4it [00:25,  5.74s/it]Transcribing: 4it [00:25,  6.35s/it]
+[NeMo W 2026-07-30 20:56:48 conformer_encoder:918] att_context_size=[70, 13] is not among the list of the supported look-aheads: [[70, 1]]
+[NeMo W 2026-07-30 20:56:48 dataloader:826] The following configuration keys are ignored by Lhotse dataloader: use_start_end_token
+[NeMo W 2026-07-30 20:56:48 dataloader:523] You are using a non-tarred dataset and requested tokenization during data sampling (pretokenize=True). This will cause the tokenization to happen in the main (GPU) process,possibly impacting the training speed if your tokenizer is very large.If the impact is noticable, set pretokenize=False in dataloader config.(note: that will disable token-per-second filtering and 2D bucketing features)
+[70, 6]            53.99     10     +14.10
+Transcribing: 0it [00:00, ?it/s]Transcribing: 1it [00:06,  6.41s/it]Transcribing: 2it [00:15,  7.75s/it]Transcribing: 3it [00:20,  6.73s/it]Transcribing: 4it [00:24,  5.68s/it]Transcribing: 4it [00:24,  6.17s/it]
+[70, 13]           71.70     18     +31.81
+
+  best screened context: [70, 1] (proxy 39.89%)
+  G-HA0 KILL: no larger context is within +3 proxy pts of [70,1].
+  -> our single-context finetune did not leave the other contexts usable.
+  -> STOP the export/decode stages. H-A is a GPU arm. Do not spend the session.
+
+wrote /workspace/artifacts/step03/lookahead_probe.json
+LOOKAHEAD_PROBE_DONE
+
+STOP AND READ before running 'export':
+  G-HA0 KILL  -> H-A is a GPU arm. Stop the pod now.
+  G-HA0 PASS  -> rerun with STAGES="export parity decode score" and only the
+                 surviving contexts in CONTEXTS.
+
+=========== SESSION DONE (20:57:24) ===========
+Copy back: /workspace/artifacts/step03  then STOP THE POD.

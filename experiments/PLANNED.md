@@ -68,7 +68,14 @@ Status vocabulary: `blocked` · `ready` (code exists, gate written, awaiting pod
 | **S0** | Official-scorer error decomposition | CPU pod (data lives there) | ~0, minutes | **done 2026-07-30** → `EXPERIMENT_LOG.md` `exp_s0_s1_probe` | empties = **3.89** CER pts (not 11.29); deletions **13.04** of 18.73; **51% of error mass is 13+ word utts** |
 | **S1** | Blank-penalty probe + sweep | S0 shares the session | 11 min spent of ~4.5 h budgeted | **NO-GO 2026-07-30, grid not run** | empties are MORE confidently blank (p10 margin 6.35 vs 2.61); β≈6 needed, flips 27% of all blanks |
 | **S2a** | Deletion localization (position / runs / rate) | S0 alignments; no decode | ~0, minutes | **done 2026-07-30** → `EXPERIMENT_LOG.md` `exp_s2_beam` | positions FLAT, runs 62.7% singletons → M3 + left-context exhaustion FALSIFIED; CER tracks speaking RATE (4x, spearman −0.254) not word count (+0.027) |
-| **S2c** | RNN-T beam grid on the shipped fp32 artifact | S2a green | ~1h50m spent, ≈$8 | **FALSIFIED 2026-07-30** | every config worse than greedy (best 20.256 vs 18.733); `dDel` POSITIVE for all — beam ADDS deletions. Keep `beam: 1` |
+| **S2c** | RNN-T beam grid on the shipped fp32 artifact | S2a green | ~1h50m spent, ≈$8 | **FALSIFIED 2026-07-30** — but see S3-0, which shows the whole-set number hid two opposite effects | every config worse than greedy (best 20.256 vs 18.733); `dDel` POSITIVE for all — beam ADDS deletions. Keep `beam: 1` |
+| **S3-0** | Rate/speaker stratification + paired bootstrap of the banked runs | none — reads banked artifacts | **~0, local, $0** | **done 2026-07-30** → `exp_s3_phase0_strat` | slow quartile is only **9.3% of ref chars** (rate levers capped at −3.69 pts); Dev_diag unpaired CI **±2.7 pts**; beam is **−5.65 on Q1 / +3.82 on Q3** |
+| **H-A** | Larger lookahead by ONNX re-export | S3-0 | 13 min spent of ~1h45m budgeted, ≈$1 | **FALSIFIED 2026-07-30 (G-HA0 kill)** → `exp_s3_ha_lookahead` | screen collapses monotonically (+3.54/+14.10/+31.81); **base is natively `[70,1]`**, so this was never a re-export |
+| **H-F** | Acoustic forensics on speaker `55c1784a` | S3-0 | ~3 min, shared session | **done 2026-07-30** → `exp_s3_hf_forensics` | out-of-family on SNR/level/centroid but **`peak_dbfs` does not separate** → hypophonic speech, not a channel fault. **No front-end fix exists** |
+| **H-G** | Rate-conditioned decode (greedy default, length-normalised beam when slow) | S3-0 | ~1 h CPU pod | **ready — needs an online rate estimator first** | paired ΔCER with the switch, vs the −1.05 pt oracle ceiling |
+| **H-D** | FastEmit λ sweep {0.0, 0.03, 0.1, 0.3} | none | ~2.5 h GPU/rung | **ready** | paired severe ΔCER ≤ −1.00 with CI excluding 0; charD must fall |
+| **H-E** | Widened speed-perturb (0.6–1.3) + slow/severity-targeted sampling | none | ~3 h GPU | **ready** | same gate as H-D, plus the Q1/Q2 quartile deltas |
+| **H-B** | Front-end time compression of slow audio | S3-0 | ~1 h CPU pod (oracle first) | **deprioritized** — capped at ~2.7 pts by the mass distribution | oracle: slow-quartile CER at the known-correct compression factor |
 | **D0** | Synthetic-data forensics | pod (data lives there) | ~0, CPU, minutes | **done** 2026-07-29 → `experiments/exp_d0_synth_forensics/NOTES.md` | kNN-VC: G-COVER PASS, G-PROV FAIL(100%) · G-EOS PASS · F5: UNMEASURED (no transcripts on pod) |
 | **D1** | Arm B control — joint unfreeze + FastEmit | D0 not required | ~2.5 h GPU | **done 2026-07-29 — FALSIFIED** → `EXPERIMENT_LOG.md` `exp_armB_parakeet` | severe CER 18.69% → **18.74%** (worse), empties **48 → 50** |
 | D6 | Short-command oversampling | folds into D1 | free | **deprioritized** — premise dented: ≤3-word utts are already 22.5% of train (74,606), not rare | A/B inside D1 |
@@ -265,6 +272,56 @@ Two riders that bind D2–D5, not just D5:
 `wget`. Start the request early — it is the long pole, and it runs in parallel with D0/D1 for free.
 
 Use as **fine-tuning supplement into the joint** — not pretraining, not evaluation.
+
+---
+
+### S3 — what stratifying the banked runs changed, and what it retired
+**Added 2026-07-30.** Two levers ranked 1 and 2 for the next spend are now closed, and the closure
+was cheap: **$0 locally + $1.00 of pod**.
+
+**Every number this section rests on came from records already on disk.**
+`scripts/analyze_rate_and_speakers.py` re-reads the per-utterance rows `error_decomposition.py`
+banked and self-gates on reproducing the official micro CER from them (delta **0.0e+00**).
+
+**The mass correction.** The rate gradient is real (Q1 39.70% vs Q4 10.31%) but the slow quartile
+holds only **9.3% of the reference characters**, so every rate-targeted lever — front-end time
+compression, rate-conditioned decode — is capped at **−3.69 points** and realistically ~−2.7.
+**74% of the characters are in Q3+Q4.** Rate is a *difficulty* statistic; treating it as a *mass*
+statistic is the mirror image of the retracted "51% of error mass is 13+ word utterances" claim.
+
+**The measurement correction.** Dev_diag's unpaired 95% CI is **±2.7 CER points** on n=425. Paired
+resolves ~±1.5. Sub-point unpaired verdicts in this repo's history — including D1's "−0.05 worse" —
+were inside noise and should be read as nulls, not falsifications. **Every gate from here is paired.**
+
+**The beam correction.** `b4m2mean` is **−5.65 on Q1** and **+3.82 on Q3**; the whole-set +1.52 was
+two opposite effects cancelling. Length-normalised beam is the right decode for slow speech and the
+wrong one for fast speech, and fast speech holds the characters. The fast-quartile damage is 8/8
+significant; the slow benefit is 1 of 4, so it is registered as **H-G**, a hypothesis needing an
+**online** rate estimator (the quartiles here are reference-derived), against a −1.05 pt oracle ceiling.
+
+**H-A is retired, and not for the reason we expected.** The screen collapsed monotonically
+(+3.54 / +14.10 / +31.81 proxy points at [70,3] / [70,6] / [70,13]), and the follow-up showed the
+**base** checkpoint is *also* `att_context_size [70,1]`, `att_context_probs [1.0]`. Our single-context
+finetune destroyed nothing — `parakeet_realtime_eou_120m` is natively an 80 ms-only model. The
+premise survives (right context is still the only lever that reaches Q3+Q4); what died is the claim
+that this checkpoint could be re-exported into it. Acting on the premise now means changing base to
+the multi-lookahead FastConformer-114M (33.75 zero-shot @ 480 ms) and finetuning it — a much larger
+bet than a re-export, and it must be costed as one.
+
+**H-F found the ceiling on a front-end fix: there isn't one.** Speaker `55c1784a` is out-of-family on
+SNR (24.7 vs 49.8 dB), speech level (−19.8 dB) and spectral centroid (215 vs 625 Hz) — but
+**`peak_dbfs` does not separate**. A gain or microphone fault scales peaks down too; this does not.
+Normal peaks with RMS 10 dB down and 0.38 speech activity is intermittent low-amplitude phonation:
+severe hypophonic ALS speech, not a bad channel. That also explains why frozen `input_gain` recovered
+0/48. Corpus-wide, the empties show **no** acoustic signature (C3: none), and within the speaker the
+empties are indistinguishable from its own non-empties (C4: none) — so there is no runtime trigger to
+detect either. **2.14 CER points reachable only by training data**, and because it is physiology
+rather than a recording session, similar speakers plausibly appear in Test.
+
+**What that leaves.** Every remaining CER lever except H-G is a GPU arm, and the two mechanism-aligned
+ones are **H-D** (FastEmit λ, never swept; base ships 0.03, above the 0.02 its own docstring calls
+regressive) and **H-E** (speed perturb is present but spans **±10%** against a **4x** failure axis,
+and sampling is uniform rather than slow- or severity-targeted).
 
 ---
 
