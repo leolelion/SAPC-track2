@@ -19,6 +19,16 @@
 #   3. Dev_clean2k CER      <= 15%   (banked 13.51%)
 #   4. mean(TTFT p50, TTLT p50) <= 420 ms (banked 356 ms)
 #   5. projected Test wall-clock <= 15000 s with >= 30% margin
+#   6. ISA GATE: either the gating CPU's instruction set matches the eval worker's, or the
+#      submission uses no ISA-sensitive kernels. Added 2026-07-29 after the int8 zip scored
+#      100% CER: every gate ran on this pod's Xeon 8462Y+ (Sapphire Rapids, avx512_vnni +
+#      avx_vnni) while the Codabench worker is EPYC Milan (Zen 3 — avx2, NO vnni, NO
+#      avx512). ORT's dynamic-quantization path is U8S8: MatMulInteger lowers to
+#      VPMADDUBSW, which accumulates two u8*s8 products into a SATURATING int16 (worst case
+#      255*127*2 = 64770 >> 32767). With VNNI the accumulate is int32 and cannot saturate,
+#      so the VNNI pod could never reproduce the worker's arithmetic. reduce_range=True
+#      caps weights at 7 bits (255*63*2 = 32130 < 32767) and makes the AVX2 path safe; we
+#      shipped reduce_range=False. An fp32 encoder sidesteps the whole class.
 # Any miss -> do not submit, report the delta. Never submit to test a hypothesis.
 # =====================================================================
 set -euo pipefail
@@ -45,10 +55,19 @@ has()  { [[ " $STAGES " == *" $1 "* ]]; }
 # --------------------------------------------------------------- wheels
 # Bundle onnxruntime so setup.sh can install with --no-index. cp311/manylinux to match
 # the Codabench runtime (python 3.11, linux x86_64).
+#
+# ORT_VERSION IS PINNED ON PURPOSE. This line used to read `pip download onnxruntime`,
+# unpinned, and that cost us a submission: it resolved to 1.27.0 in June (the nemotron zip
+# that scored 27.97%) and to 1.28.0 on 2026-07-29 (the parakeet zip that scored 100% CER).
+# Every accuracy/latency gate that day ran inside $VENV, which already had 1.27.0, so
+# setup.sh's `if ! python3 -c "import onnxruntime"` guard skipped the bundled wheel and the
+# version we gated was never the version we shipped. Only bump this deliberately, and only
+# with a full re-gate.
+ORT_VERSION=${ORT_VERSION:-1.27.0}
 if has wheels; then
-  step "wheels"
+  step "wheels (onnxruntime==$ORT_VERSION)"
   rm -rf "$SRC/wheels"; mkdir -p "$SRC/wheels"
-  pip download onnxruntime --only-binary=:all: --dest "$SRC/wheels" \
+  pip download "onnxruntime==$ORT_VERSION" --only-binary=:all: --dest "$SRC/wheels" \
       --python-version 311 --implementation cp --platform manylinux_2_28_x86_64
   ls -la "$SRC/wheels"
 fi
@@ -152,10 +171,23 @@ fi
 # behind real time and the 356 ms corner — our whole reason to ship this — collapses.
 # Pre-registered: pick the LOWEST thread count whose mean(TTFT,TTLT) <= 420 ms. If even
 # threads=4 misses, the corner is thread-bound: STOP and report, do not raise blindly.
+if has gate_lat || has gate_acc; then
+  # THE GATE MUST RUN THE SHIPPED RUNTIME. $VENV has its own onnxruntime, so decoding with
+  # it silently measures a version the submission does not carry (see the ORT_VERSION note
+  # above — this is exactly how the 100%-CER parakeet zip passed five green gates). The
+  # offline venv is the only interpreter whose ort came from the bundled wheel.
+  GATEPY="$WORK/offlinevenv/bin/python"
+  [[ -x "$GATEPY" ]] || { echo "gate: $GATEPY missing — run the 'offline' stage first"; exit 1; }
+  GATE_ORT=$("$GATEPY" -c "import onnxruntime;print(onnxruntime.__version__)")
+  [[ "$GATE_ORT" == "$ORT_VERSION" ]] || {
+    echo "gate: interpreter has ort $GATE_ORT but the bundle pins $ORT_VERSION — refusing to gate"; exit 1; }
+  echo "[gate] decoding with $GATEPY (onnxruntime $GATE_ORT)"
+fi
+
 if has gate_lat; then
   step "thread sweep + latency (extracted zip)"
   for T in 1 2 4; do
-    SAPC2_THREADS=$T python3 "$REPO/track2_starting_kit/local_decode.py" \
+    SAPC2_THREADS=$T "$GATEPY" "$REPO/track2_starting_kit/local_decode.py" \
       --submission-dir "$WORK/extract" \
       --manifest-csv "$DATA/manifest/Dev_streaming.csv" \
       --streaming-manifest-csv "$DATA/manifest/Dev_streaming.csv" \
@@ -176,7 +208,7 @@ if has gate_acc; then
   for SPLIT in Dev_diag Dev_clean2k; do
     # no --streaming-manifest-csv: local_decode falls back to --manifest-csv, and these
     # slices have no *_streaming.csv (latency is scored on Dev_streaming, in gate_lat)
-    python3 "$REPO/track2_starting_kit/local_decode.py" \
+    "$GATEPY" "$REPO/track2_starting_kit/local_decode.py" \
       --submission-dir "$WORK/extract" \
       --manifest-csv "$DATA/manifest/$SPLIT.csv" \
       --streaming-interval 0 --data-root "$DATA" \
