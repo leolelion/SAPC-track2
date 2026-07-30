@@ -95,13 +95,14 @@ def main() -> None:
     p.add_argument("--manifest-csv", type=Path, help="omit to run on --synthetic audio")
     p.add_argument("--data-root", type=Path)
     p.add_argument("--max-utts", type=int, default=40)
+    p.add_argument("--wav", nargs="+", help="explicit 16 kHz mono 16-bit wav paths (no manifest needed)")
     p.add_argument("--synthetic", action="store_true", help="smoke-test with generated audio (no SAP data)")
     p.add_argument("--betas", default="0.25,0.5,1.0,1.5,2.0,3.0,4.0,6.0,8.0,12.0")
     p.add_argument("--out-json", type=Path, required=True)
     args = p.parse_args()
 
-    if not args.synthetic and not (args.manifest_csv and args.data_root):
-        raise SystemExit("need --manifest-csv + --data-root, or --synthetic")
+    if not args.synthetic and not args.wav and not (args.manifest_csv and args.data_root):
+        raise SystemExit("need --manifest-csv + --data-root, or --wav, or --synthetic")
 
     sys.path.insert(0, str(args.submission_dir))
     from model import Model  # noqa: E402  (the submission's own wrapper, unmodified)
@@ -114,6 +115,8 @@ def main() -> None:
 
     if args.synthetic:
         clips = [("synthetic", synthetic_audio())]
+    elif args.wav:
+        clips = [(Path(w).stem, read_wave(w)) for w in args.wav]
     else:
         rows = list(csv.DictReader(open(args.manifest_csv, newline="", encoding="utf-8")))
         clips = [

@@ -101,6 +101,50 @@ correctly confident about blank. Real dysarthric speech at a genuine emit point 
 unknown amount. What the local run establishes is the **scale** — logits are O(10), not O(1) — not
 the operating point. The on-pod probe on real Dev_diag audio sets that.
 
+### Local calibration on controlled speech (2026-07-30, no pod, no SAP data)
+
+Five macOS-`say` clips whose texts are taken verbatim from the empty slice (`alexa`, `hey siri`,
+`answer the call`, `add paper towels and cereal to the shopping list`, `what is on my shopping list`),
+run through the shipped artifact on Mac arm64.
+
+**Clean:** all five transcribed **perfectly**, wake-words included. So `alexa` / `hey siri` are not
+out-of-vocabulary for this checkpoint and the OOD-lexicon story in
+`parakeet_improvement_framework.md` §4 is not what produces those empties. Blank margins p10 5.4 /
+p50 12.0.
+
+**Gain sweep, −10 / −20 / −30 dB** (RMS down to −51 dBFS, below the SAP empties' −29.6 dBFS body):
+**nothing changed.** Same transcripts, same margins, same 68.18% blank rate at every level. The
+front-end is per-feature normalised, so a global gain cancels. This independently explains why the
+`input_gain` patch recovered **0/48** empties: it was correcting a quantity the model never sees.
+**The "quiet onset −58.5 dBFS" finding is a correlate of the failing utterances, not its cause.**
+
+**SNR sweep** (additive white noise on the same clips), which is what attenuation-with-a-noise-floor
+actually does:
+
+| SNR | empties | p50 blank margin | behaviour |
+|---|---|---|---|
+| clean | 0/5 | 11.98 | all correct |
+| 10 dB | 0/5 | 9.63 | `alexa` → `alex` |
+| 5 dB | 0/5 | 9.75 | `hey siri` → `hey sir` |
+| **0 dB** | **1/5** | 7.45 | **`hey siri` → empty**; long utterances still fine |
+| −5 dB | 2/5 | 5.75 | both wake-words empty; long ones hallucinate |
+
+That is the SAP signature reproduced under control: **short utterances go empty first, long ones
+degrade gracefully** (SAP: 22 of 48 empties are ≤3 words).
+
+**And the GO/NO-GO instrument returns GO on this proxy.** At the onset of failure (SNR 0 dB) the
+empty utterance's blank margins are **lower** than the non-empty ones — p50 5.97 vs 8.90
+(**Δ −2.92**), p10 3.99 vs 4.83. The empties are the *least* confident blanks, which is the
+direction in which a modest β reaches them before disturbing anything else.
+
+**What this is and is not.** TTS speech plus white noise is not dysarthric speech; this is a
+mechanism probe and an instrument check, never a ship gate (house rule
+`validate-against-real-harness`). What it earns: the instrument produces a signed, readable answer;
+the responsive β band on *degraded* speech is p10 ≈ 1.5–4 / p50 ≈ 6–10, so **the grid is revised
+again to `0 1 2 3 4 6 8`** — the earlier `0 … 12` was calibrated on clean audio and reached too high.
+Watch the −5 dB row: past the responsive band the model does not merely blank, it **hallucinates**
+(`how many dollars and philadelphia`), which is what an over-large β will amplify.
+
 ### GO/NO-GO, pre-registered, decided by the probe before the grid runs
 
 The probe splits per-utterance blank margins by whether that utterance came out **empty**.

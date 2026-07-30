@@ -43,10 +43,12 @@ GATEPY=${GATEPY:-$WORK/offlinevenv/bin/python}   # decode/probe: must be the SHI
 DECOMPPY=${DECOMPPY:-python3}                     # scoring/analysis: the interpreter evaluate.sh uses
 ORT_VERSION=${ORT_VERSION:-1.27.0}
 # Provisional. The `probe` stage measures the real blank-margin distribution and prints
-# the grid to use; replace this with what it says. A synthetic-audio probe on 2026-07-30
-# put blank margins at 6.7-15.9 (median 14.6), so the original 0-4 guess was entirely
-# dead -- every beta below ~6 flipped nothing. Do not sweep before probing.
-GRID=${GRID:-"0.0 2.0 4.0 6.0 8.0 10.0 12.0"}
+# the grid to use; replace this with what it says. Calibrated locally 2026-07-30 on the
+# shipped artifact: blank margins on clean speech p10 5.4 / p50 12.0, on DEGRADED speech
+# (0 to -5 dB SNR, where utterances actually go empty) p10 1.5-4 / p50 6-10. The original
+# 0-4 guess was dead on clean audio; 0-12 reached too high for degraded audio. Do not
+# sweep before probing on real Dev audio.
+GRID=${GRID:-"0.0 1.0 2.0 3.0 4.0 6.0 8.0"}
 FINAL=${FINAL:-}                            # betas to confirm on Dev_clean2k; set after the grid
 PROBE_UTTS=${PROBE_UTTS:-60}
 STAGES=${STAGES:-"probe"}
